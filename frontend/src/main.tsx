@@ -16,6 +16,8 @@ import {
 
 // Minimal Android-specific adaptations
 const PLAYER_BACKGROUND = 'transparent'
+const ACTIVE_LINE_ALIGN_ANCHOR = 'top' as const
+const ACTIVE_LINE_ALIGN_POSITION = 0.3
 const demoAlbumArt = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJyZ2JhKDAsMCwwLDAuMSkiLz48L3N2Zz4='
 
 interface WordEntry {
@@ -421,8 +423,8 @@ function App() {
         enableScale={motionConfig.enableScale}
         hidePassedLines={motionConfig.hidePassedLines}
         wordFadeWidth={motionConfig.wordFadeWidth}
-        alignAnchor="center"
-        alignPosition={0.5}
+        alignAnchor={ACTIVE_LINE_ALIGN_ANCHOR}
+        alignPosition={ACTIVE_LINE_ALIGN_POSITION}
         linePosYSpringParams={{ mass: 0.9, damping: 15, stiffness: 90 }}
         lineScaleSpringParams={{ mass: 2, damping: 25, stiffness: 100 }}
         onLyricLineClick={handleLineClick}
