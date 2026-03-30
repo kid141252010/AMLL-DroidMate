@@ -50,3 +50,9 @@ frontend/node_modules/
 # Build artifacts
 app/build/
 frontend/dist/
+
+# keys
+*.jks
+*.keystore
+*.p12
+keystore.properties
