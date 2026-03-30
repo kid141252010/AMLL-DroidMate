@@ -159,6 +159,7 @@ class AMLLWebSocketClient private constructor(
         currentTime: Long,
         isPlaying: Boolean,
         lyrics: TTMLLyrics?,
+        rawTtmlContent: String? = null,
         onConnectedCallback: (() -> Unit)? = null,
         onCommandReceived: ((String, kotlinx.serialization.json.JsonObject?) -> Unit)? = null,
         onErrorCallback: ((Throwable) -> Unit)? = null
@@ -219,8 +220,8 @@ class AMLLWebSocketClient private constructor(
                     return null
                 }
                 
-                val ttmlContent = lyrics?.let {
-                    com.amll.droidmate.data.converter.TTMLConverter.toTTMLString(it).takeIf { it.isNotBlank() }
+                val ttmlContent = rawTtmlContent?.takeIf { it.isNotBlank() } ?: lyrics?.let {
+                    com.amll.droidmate.data.converter.TTMLConverter.toTTMLString(it).takeIf { serialized -> serialized.isNotBlank() }
                 }
                 
                 val state = PlayState(

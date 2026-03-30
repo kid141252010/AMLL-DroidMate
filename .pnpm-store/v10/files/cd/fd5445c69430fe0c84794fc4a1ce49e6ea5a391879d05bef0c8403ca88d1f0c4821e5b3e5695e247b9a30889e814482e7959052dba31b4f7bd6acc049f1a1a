@@ -1,0 +1,46 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = debugLabelPlugin;
+const template_1 = __importDefault(require("@babel/template"));
+const utils_js_1 = require("./utils.js");
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const templateBuilder = template_1.default.default || template_1.default;
+function debugLabelPlugin({ types: t }, options) {
+    return {
+        visitor: {
+            ExportDefaultDeclaration(nodePath, state) {
+                const { node } = nodePath;
+                if (t.isCallExpression(node.declaration) &&
+                    (0, utils_js_1.isAtom)(t, node.declaration.callee, options === null || options === void 0 ? void 0 : options.customAtomNames)) {
+                    const filename = (state.filename || 'unknown').replace(/\.\w+$/, '');
+                    let displayName = filename.split('/').pop();
+                    // ./{module name}/index.js
+                    if (displayName === 'index') {
+                        displayName =
+                            filename.slice(0, -'/index'.length).split('/').pop() || 'unknown';
+                    }
+                    // Relies on visiting the variable declaration to add the debugLabel
+                    const buildExport = templateBuilder(`
+          const %%atomIdentifier%% = %%atom%%;
+          export default %%atomIdentifier%%
+          `);
+                    const ast = buildExport({
+                        atomIdentifier: t.identifier(displayName),
+                        atom: node.declaration,
+                    });
+                    nodePath.replaceWithMultiple(ast);
+                }
+            },
+            VariableDeclarator(path) {
+                if (t.isIdentifier(path.node.id) &&
+                    t.isCallExpression(path.node.init) &&
+                    (0, utils_js_1.isAtom)(t, path.node.init.callee, options === null || options === void 0 ? void 0 : options.customAtomNames)) {
+                    path.parentPath.insertAfter(t.expressionStatement(t.assignmentExpression('=', t.memberExpression(t.identifier(path.node.id.name), t.identifier('debugLabel')), t.stringLiteral(path.node.id.name))));
+                }
+            },
+        },
+    };
+}

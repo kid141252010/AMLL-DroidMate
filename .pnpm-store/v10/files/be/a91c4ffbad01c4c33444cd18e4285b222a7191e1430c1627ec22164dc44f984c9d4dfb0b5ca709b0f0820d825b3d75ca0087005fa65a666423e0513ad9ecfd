@@ -1,0 +1,33 @@
+{
+	"name": "@iconify/icons-fluent",
+	"description": "Iconify icon components for Fluent UI System Icons",
+	"version": "1.2.38",
+	"iconSetInfo": {
+		"name": "Fluent UI System Icons",
+		"total": 14775,
+		"version": "1.1.221",
+		"author": {
+			"name": "Microsoft Corporation",
+			"url": "https://github.com/microsoft/fluentui-system-icons"
+		},
+		"license": {
+			"title": "MIT",
+			"spdx": "MIT",
+			"url": "https://github.com/microsoft/fluentui-system-icons/blob/main/LICENSE"
+		},
+		"samples": [
+			"zoom-out-24-filled",
+			"drink-coffee-24-regular",
+			"photo-filter-24-regular"
+		],
+		"displayHeight": 24,
+		"category": "General",
+		"palette": false
+	},
+	"homepage": "https://icon-sets.iconify.design/fluent/",
+	"bugs": "https://github.com/iconify/icon-sets/issues",
+	"license": "MIT",
+	"dependencies": {
+		"@iconify/types": "*"
+	}
+}

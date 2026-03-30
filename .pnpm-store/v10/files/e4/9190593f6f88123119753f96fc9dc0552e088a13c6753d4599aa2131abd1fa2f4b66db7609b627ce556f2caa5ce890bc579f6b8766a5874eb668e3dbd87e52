@@ -1,0 +1,29 @@
+{
+    "name": "@types/w3c-image-capture",
+    "version": "1.0.11",
+    "description": "TypeScript definitions for w3c-image-capture",
+    "homepage": "https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/w3c-image-capture",
+    "license": "MIT",
+    "contributors": [
+        {
+            "name": "Cosium",
+            "githubUsername": "cosium",
+            "url": "https://github.com/cosium"
+        }
+    ],
+    "main": "",
+    "types": "index.d.ts",
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/DefinitelyTyped/DefinitelyTyped.git",
+        "directory": "types/w3c-image-capture"
+    },
+    "scripts": {},
+    "dependencies": {
+        "@types/webrtc": "*"
+    },
+    "peerDependencies": {},
+    "typesPublisherContentHash": "ff9a20f5d2cafb920db87e39c6822760f0e31aad79a316121ca3ed6625a0fa0d",
+    "typeScriptVersion": "5.1",
+    "nonNpm": true
+}

@@ -1,0 +1,19 @@
+{
+	"entryPoints": [
+		"dummy.ts",
+		"example.tsx"
+	],
+	"tsconfig": "tsconfig.json",
+	"plugin": [
+		"../dist/index.js"
+	],
+	"readme": "none",
+	"reactReturnType": "Element",
+	"notReactHook": [
+		"useNotHook",
+		"useNotArrowHook",
+		"useNotHook1",
+		"useNotHook2"
+	],
+	"out": "../public"
+}

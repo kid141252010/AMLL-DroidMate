@@ -141,7 +141,8 @@ data class LyricsResult(
     val isSuccess: Boolean,
     val lyrics: TTMLLyrics? = null,
     val errorMessage: String? = null,
-    val source: String? = null
+    val source: String? = null,
+    val rawTtmlContent: String? = null
 )
 
 /**

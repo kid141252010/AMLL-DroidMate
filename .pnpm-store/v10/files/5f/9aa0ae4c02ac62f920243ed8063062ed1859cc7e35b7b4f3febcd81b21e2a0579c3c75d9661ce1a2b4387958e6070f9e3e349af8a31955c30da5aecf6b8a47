@@ -1,0 +1,14 @@
+.react-functional-component::before, .react-hook::before {
+	background-position: 0 0 !important;
+	background-repeat: no-repeat;
+}
+.react-functional-component::before {
+	background-image: url("REACT_LOGO");
+}
+.react-hook::before {
+	background-image: url("REACT_HOOK_LOGO");
+}
+.tsd-index-content .react-functional-component,
+.tsd-index-content .react-hook {
+	color: #61dafb !important;
+}

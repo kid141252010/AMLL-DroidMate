@@ -26,14 +26,18 @@ import androidx.compose.ui.unit.dp
 import com.amll.droidmate.ui.AppSettings
 import com.amll.droidmate.websocket.AMLLWebSocketClient
 import androidx.compose.ui.viewinterop.AndroidView
+import com.amll.droidmate.data.converter.TTMLConverter
 import com.amll.droidmate.domain.model.TTMLLyrics
 import com.amll.droidmate.websocket.WsProtocolV2Helper
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.encodeToString
 import timber.log.Timber
 import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import java.util.concurrent.atomic.AtomicInteger
+import kotlin.math.abs
 
 /**
  * 对齐原AMLL项目的两种DOM渲染策略:
@@ -47,10 +51,14 @@ enum class AMLLRenderMode {
 
 private const val AMLL_LOG_TAG = "AMLL"
 private val AMLL_VIEW_INSTANCE_COUNTER = AtomicInteger(0)
+private const val SEEK_RELEASE_TOLERANCE_MS = 1000L
+private const val SEEK_RELEASE_TIMEOUT_MS = 5000L
+private val WEB_LYRICS_JSON = Json { encodeDefaults = true }
 
 @Composable
 fun AMLLLyricsView(
     lyrics: TTMLLyrics?,
+    rawTtmlContent: String? = null,
     currentTime: Long,
     musicId: String = "",
     musicName: String = "Unknown",
@@ -85,6 +93,7 @@ fun AMLLLyricsView(
         currentTime = currentTime,
         isPlaying = isPlaying,
         lyrics = lyrics,
+        rawTtmlContent = rawTtmlContent,
         debugSource = debugSource,
         onCommandReceived = { command, valueObj ->
             when (command) {
@@ -190,6 +199,12 @@ fun AMLLLyricsView(
         return
     }
     
+    val hasRawTtml = !rawTtmlContent.isNullOrBlank()
+    if ((lyrics == null || lyrics.lines.isEmpty()) && !hasRawTtml) {
+        Timber.d("[AMLLLyrics] [WebView] [$debugSource] No lyric lines and no raw TTML, skip AMLL WebView render")
+        return
+    }
+
     val instanceId = remember { AMLL_VIEW_INSTANCE_COUNTER.incrementAndGet() }
     val onLyricsClickState = rememberUpdatedState(onLyricsClick)
     val onLineSeekState = rememberUpdatedState(onLineSeek)
@@ -199,10 +214,13 @@ fun AMLLLyricsView(
     var lastModeValue by remember { mutableStateOf<String?>(null) }
     var lastBackgroundProfileValue by remember { mutableStateOf<String?>(null) }
     var lastLyrics by remember { mutableStateOf<TTMLLyrics?>(null) }
+    var lastRawTtmlContent by remember { mutableStateOf<String?>(null) }
     var lastLyricsPayload by remember { mutableStateOf<String?>(null) }
     var lastAlbumArtUri by remember { mutableStateOf<String?>(null) }
     var lastFontConfigSignature by remember { mutableStateOf<String?>(null) }
     var lastMotionConfigValue by remember { mutableStateOf<String?>(null) }
+    var pendingSeekTargetMs by remember { mutableStateOf<Long?>(null) }
+    var pendingSeekIssuedAtMs by remember { mutableStateOf<Long?>(null) }
     
     // 记录上次发送的状态，用于去重
     var lastSentMusicId by remember { mutableStateOf<String?>(null) }
@@ -339,9 +357,12 @@ fun AMLLLyricsView(
                         lastModeValue = null
                         lastBackgroundProfileValue = null
                         lastLyrics = null
+                        lastRawTtmlContent = null
                         lastLyricsPayload = null
                         lastAlbumArtUri = null
                         lastFontConfigSignature = null
+                        pendingSeekTargetMs = null
+                        pendingSeekIssuedAtMs = null
                         Timber.d("[AMLLLyrics] [$debugSource#$instanceId] WebView page started: $url")
                     }
 
@@ -353,8 +374,15 @@ fun AMLLLyricsView(
                         // 页面刷新结束时不主动清空 lastLyrics，让我们知道是否还有有效歌词
                         // lastLyrics = null
                         // 页面刷新完成后如果我们之前有歌词 JSON 且当前仍然有 lyrics（不是因歌曲切换而清空），先立刻重新下发
-                        if (isBridgeReady && lastLyricsPayload != null && lastLyrics != null) {
-                            Timber.d("[AMLLLyrics] [$debugSource#$instanceId] reapplying lyrics payload after page finish")
+                        if (isBridgeReady && lastRawTtmlContent != null) {
+                            val escapedTtml = escapeJsString(lastRawTtmlContent.orEmpty())
+                            Timber.d("[AMLLLyrics] [$debugSource#$instanceId] reapplying raw TTML payload after page finish")
+                            view.evaluateJavascript(
+                                "window.updateTtmlLyrics && window.updateTtmlLyrics(\"$escapedTtml\");",
+                                null
+                            )
+                        } else if (isBridgeReady && lastLyricsPayload != null && lastLyrics != null) {
+                            Timber.d("[AMLLLyrics] [$debugSource#$instanceId] reapplying structured lyrics payload after page finish")
                             view.evaluateJavascript("window.updateLyrics && window.updateLyrics($lastLyricsPayload);", null)
                         }
                         // 不清空 payload，让 update() 继续根据 lyrics 对象决定重新生成
@@ -426,9 +454,12 @@ fun AMLLLyricsView(
                             // schedule a UI-thread action so that the webview can immediately
                             // acknowledge the seek and prevent the "lyrics running around" effect.
                             webViewRef.post {
+                                pendingSeekTargetMs = seekTime
+                                pendingSeekIssuedAtMs = System.currentTimeMillis()
+
                                 // tell the JS player we are seeking so it can suspend auto-scroll
                                 webViewRef.evaluateJavascript(
-                                    "window.callPlayer && window.callPlayer('setIsSeeking', true);",
+                                    "window.setSeeking && window.setSeeking(true);",
                                     null
                                 )
 
@@ -486,6 +517,24 @@ fun AMLLLyricsView(
             view.evaluateJavascript("window.updateTime && window.updateTime($currentTime);", null)
             
             // 同时通过 WebSocket 发送到外部服务
+            val targetSeekMs = pendingSeekTargetMs
+            if (targetSeekMs != null) {
+                val seekReached = abs(currentTime - targetSeekMs) <= SEEK_RELEASE_TOLERANCE_MS
+                val seekTimedOut =
+                    pendingSeekIssuedAtMs?.let { issuedAt ->
+                        (System.currentTimeMillis() - issuedAt) >= SEEK_RELEASE_TIMEOUT_MS
+                    } ?: false
+                if (seekReached || seekTimedOut) {
+                    Timber.d(
+                        "[AMLLLyrics] [$debugSource#$instanceId] Bridge call: setSeeking(false) " +
+                            "(target=$targetSeekMs, current=$currentTime, timeout=$seekTimedOut)"
+                    )
+                    view.evaluateJavascript("window.setSeeking && window.setSeeking(false);", null)
+                    pendingSeekTargetMs = null
+                    pendingSeekIssuedAtMs = null
+                }
+            }
+
             sendPlaybackStatusToWebSocket(currentTime, isPlayingState.value)
 
             val modeValue = if (renderMode == AMLLRenderMode.DOM) "dom" else "dom-lite"
@@ -526,41 +575,66 @@ fun AMLLLyricsView(
                 lastMotionConfigValue = motionConfig
             }
 
-            // 只在 lyrics 对象引用改变时才重新构建 JSON（避免每秒都构建）
-            if (lyrics !== lastLyrics) {
-                Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Lyrics changed: ${lyrics?.lines?.size ?: 0} lines")
-                if (lyrics != null && lyrics.lines.isNotEmpty()) {
+            val normalizedRawTtml = rawTtmlContent?.takeIf { it.isNotBlank() }
+            val rawTtmlChanged = normalizedRawTtml != lastRawTtmlContent
+            val lyricsChanged = lyrics !== lastLyrics
+            if (rawTtmlChanged || lyricsChanged) {
+                if (normalizedRawTtml != null) {
+                    val escapedTtml = escapeJsString(normalizedRawTtml)
+                    Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Bridge call: updateTtmlLyrics(length=${normalizedRawTtml.length})")
+                    view.evaluateJavascript(
+                        "window.updateTtmlLyrics && window.updateTtmlLyrics(\"$escapedTtml\");",
+                        null
+                    )
+                    lastLyricsPayload = null
+
+                    if (isWebSocketConnected) {
+                        runCatching { webSocketClient.sendLyrics(normalizedRawTtml) }
+                            .onSuccess {
+                                Timber.d("[AMLLLyrics] [WebSocket] [$debugSource#$instanceId] 已通过 WebSocket 发送原始 TTML 歌词")
+                            }
+                            .onFailure { error ->
+                                Timber.e(
+                                    error,
+                                    "[AMLLLyrics] [WebSocket] [$debugSource#$instanceId] 通过 WebSocket 发送原始 TTML 歌词失败"
+                                )
+                            }
+                    }
+                } else if (lyrics != null) {
+                    Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Lyrics changed: ${lyrics.lines.size} lines")
                     val lyricsJson = buildLyricsJson(lyrics)
                     Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Bridge call: updateLyrics(lines=${lyrics.lines.size})")
-                    // 添加详细日志，显示前几行歌词内容
                     lyrics.lines.take(3).forEachIndexed { idx, line ->
                         Timber.d("[AMLLLyrics]   Line $idx: text='${line.text}', words=${line.words.size}, isBG=${line.isBG}")
                     }
                     view.evaluateJavascript("window.updateLyrics && window.updateLyrics($lyricsJson);", null)
                     lastLyricsPayload = lyricsJson
-                                
-                    // 通过 WebSocket 发送歌词更新（V2 协议）
+
                     if (isWebSocketConnected) {
-                        try {
-                            // V2 协议格式：SetLyric 使用 Ttml 格式
-                            // {"update":"SetLyric","value":{"format":"Ttml","data":"..."}}
-                            val lyricMessage = """{"update":"SetLyric","value":{"format":"Ttml","data":$lyricsJson}}"""
-                            webSocketClient.send(lyricMessage)
-                            Timber.d("[AMLLLyrics] [WebSocket] [$debugSource#$instanceId] 已通过 WebSocket 发送歌词")
-                        } catch (e: Exception) {
-                            Timber.e("[AMLLLyrics] [WebSocket] [$debugSource#$instanceId] 通过 WebSocket 发送歌词失败", e)
-                        }
+                        runCatching { TTMLConverter.toTTMLString(lyrics) }
+                            .mapCatching { ttml -> ttml.takeIf { it.isNotBlank() } }
+                            .onSuccess { ttmlContent ->
+                                if (!ttmlContent.isNullOrBlank()) {
+                                    webSocketClient.sendLyrics(ttmlContent)
+                                    Timber.d("[AMLLLyrics] [WebSocket] [$debugSource#$instanceId] 已通过 WebSocket 发送结构化回退 TTML 歌词")
+                                }
+                            }
+                            .onFailure { error ->
+                                Timber.e(
+                                    error,
+                                    "[AMLLLyrics] [WebSocket] [$debugSource#$instanceId] 通过 WebSocket 发送结构化回退 TTML 歌词失败"
+                                )
+                            }
                     }
                 } else {
-                    // 如果 lyrics 为空或 null，注入测试歌词以便调试
-                    Timber.d("[AMLLLyrics] [$debugSource#$instanceId] No lyrics provided, injecting test lyrics")
-                    val testLyricsJson = """{"metadata":{"title":"Test","artist":"AMLL"},"lines":[{"startTime":0,"endTime":3000,"text":"测试歌词","translatedLyric":"","romanLyric":"","words":[{"word":"测试","startTime":0,"endTime":1500},{"word":"歌词","startTime":1500,"endTime":3000}],"isBG":false,"isDuet":false},{"startTime":3000,"endTime":6000,"text":"第二行歌词","translatedLyric":"","romanLyric":"","words":[{"word":"第二行","startTime":3000,"endTime":4500},{"word":"歌词","startTime":4500,"endTime":6000}],"isBG":false,"isDuet":false}]}"""
-                    view.evaluateJavascript("window.updateLyrics && window.updateLyrics($testLyricsJson);", null)
-                    lastLyricsPayload = testLyricsJson
+                    Timber.d("[AMLLLyrics] [$debugSource#$instanceId] No raw TTML and no structured lyrics to push")
+                    lastLyricsPayload = null
                 }
+
                 lastLyrics = lyrics
+                lastRawTtmlContent = normalizedRawTtml
             } else {
-                Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Lyrics reference unchanged")
+                Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Lyrics/raw TTML unchanged")
             }
 
             if (lastAlbumArtUri != albumArtUri) {
@@ -739,6 +813,37 @@ private fun escapeJsString(value: String): String {
         .replace("\t", "\\t")
 }
 
+@Serializable
+private data class WebLyricWord(
+    val word: String,
+    val startTime: Long,
+    val endTime: Long,
+)
+
+@Serializable
+private data class WebLyricLine(
+    val startTime: Long,
+    val endTime: Long,
+    val text: String,
+    val translatedLyric: String,
+    val romanLyric: String,
+    val words: List<WebLyricWord>,
+    val isBG: Boolean,
+    val isDuet: Boolean,
+)
+
+@Serializable
+private data class WebLyricsMetadata(
+    val title: String,
+    val artist: String,
+)
+
+@Serializable
+private data class WebLyricsPayload(
+    val metadata: WebLyricsMetadata,
+    val lines: List<WebLyricLine>,
+)
+
 private fun buildLyricsJson(lyrics: TTMLLyrics): String {
     val bgLines = lyrics.lines.filter { it.isBG }
     val bgWithTranslation = bgLines.count { !it.translation.isNullOrBlank() }
@@ -746,55 +851,43 @@ private fun buildLyricsJson(lyrics: TTMLLyrics): String {
     val sampleBg = bgLines.firstOrNull()
     Timber.d("[BG-LYRICS-DEBUG] buildLyricsJson summary: total=${lyrics.lines.size}, bg=${bgLines.size}, bgWithTrans=$bgWithTranslation, bgWithRoman=$bgWithRoman, sampleBg='${sampleBg?.text ?: ""}', sampleTrans='${sampleBg?.translation ?: ""}'")
 
-    // 调试日志：限制在 10 行以内，超出的降级为 v 级别
-    var debugCount = 0
-    
-    val linesJson = lyrics.lines.joinToString(",") { line ->
-        val text = line.text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
-        val translation = line.translation?.replace("\\", "\\\\")?.replace("\"", "\\\"") ?: ""
-        val transliteration = line.transliteration?.replace("\\", "\\\\")?.replace("\"", "\\\"") ?: ""
-        
-        // 构建 words 数组
-        val wordsJson = if (line.words.isNotEmpty()) {
-            line.words.joinToString(",") { word ->
-                val wordText = word.word.replace("\\", "\\\\").replace("\"", "\\\"")
-                """{"word":"$wordText","startTime":${word.startTime},"endTime":${word.endTime}}"""
+    val linesPayload = lyrics.lines.map { line ->
+        val wordsPayload = if (line.words.isNotEmpty()) {
+            line.words.map { word ->
+                WebLyricWord(
+                    word = word.word,
+                    startTime = word.startTime,
+                    endTime = word.endTime,
+                )
             }
         } else {
-            // 如果没有逐词信息，则使用整行文本作为单词
-            val wordText = text.replace("\"", "\\\"")
-            """{"word":"$wordText","startTime":${line.startTime},"endTime":${line.endTime}}"""
+            listOf(
+                WebLyricWord(
+                    word = line.text,
+                    startTime = line.startTime,
+                    endTime = line.endTime,
+                )
+            )
         }
-        
-        // 调试日志：只记录前 5 行
-        if (line.words.isNotEmpty()) {
-            if (debugCount < 5) {
-                Timber.d("[AMLLLyrics] Building JSON for line: '${line.text}' with ${line.words.size} words")
-                debugCount++
-            }
-        }
-        
-        // 调试背景歌词的数据传递
-        if (line.isBG) {
-            Timber.d("[BG-LYRICS-DEBUG] JSON for BG line: text='$text' translation='$translation' roman='$transliteration' isBG=${line.isBG}")
-        }
-        
-        """{
-            "startTime":${line.startTime},
-            "endTime":${line.endTime},
-            "text":"$text",
-            "translatedLyric":"$translation",
-            "romanLyric":"$transliteration",
-            "words":[$wordsJson],
-            "isBG":${line.isBG},
-            "isDuet":${line.isDuet}
-        }"""
+        WebLyricLine(
+            startTime = line.startTime,
+            endTime = line.endTime,
+            text = line.text,
+            translatedLyric = line.translation.orEmpty(),
+            romanLyric = line.transliteration.orEmpty(),
+            words = wordsPayload,
+            isBG = line.isBG,
+            isDuet = line.isDuet,
+        )
     }
-
-    val title = lyrics.metadata.title.replace("\\", "\\\\").replace("\"", "\\\"")
-    val artist = lyrics.metadata.artist.replace("\\", "\\\\").replace("\"", "\\\"")
-
-    return """{"metadata":{"title":"$title","artist":"$artist"},"lines":[$linesJson]}"""
+    val payload = WebLyricsPayload(
+        metadata = WebLyricsMetadata(
+            title = lyrics.metadata.title,
+            artist = lyrics.metadata.artist,
+        ),
+        lines = linesPayload,
+    )
+    return WEB_LYRICS_JSON.encodeToString(payload)
 }
 
 class AMLLInterface(

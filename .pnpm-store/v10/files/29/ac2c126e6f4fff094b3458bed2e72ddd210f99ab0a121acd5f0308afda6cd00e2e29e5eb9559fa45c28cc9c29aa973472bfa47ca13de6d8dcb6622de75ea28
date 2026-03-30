@@ -1,0 +1,11 @@
+import babel from '@babel/core';
+import pluginDebugLabel from './plugin-debug-label.js';
+import pluginReactRefresh from './plugin-react-refresh.js';
+export default function jotaiPreset(_, options) {
+    return {
+        plugins: [
+            [pluginDebugLabel, options],
+            [pluginReactRefresh, options],
+        ],
+    };
+}

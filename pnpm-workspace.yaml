@@ -2,19 +2,6 @@ packages:
   - frontend
   - applemusic-like-lyrics/packages/*
 
-overrides:
-  '@applemusic-like-lyrics/core': 'link:./applemusic-like-lyrics/packages/core'
-  '@applemusic-like-lyrics/react': 'link:./applemusic-like-lyrics/packages/react'
-  '@applemusic-like-lyrics/react-full': 'link:./applemusic-like-lyrics/packages/react-full'
-  '@applemusic-like-lyrics/lyric': 'link:./applemusic-like-lyrics/packages/lyric'
-  '@applemusic-like-lyrics/ttml': 'link:./applemusic-like-lyrics/packages/ttml'
-  '@applemusic-like-lyrics/player': 'link:./applemusic-like-lyrics/packages/player'
-  '@applemusic-like-lyrics/player-core': 'link:./applemusic-like-lyrics/packages/player-core'
-  '@applemusic-like-lyrics/ws-protocol': 'link:./applemusic-like-lyrics/packages/ws-protocol'
-  '@applemusic-like-lyrics/fft': 'link:./applemusic-like-lyrics/packages/fft'
-  '@applemusic-like-lyrics/skia-player': 'link:./applemusic-like-lyrics/packages/skia-player'
-  '@applemusic-like-lyrics/vue': 'link:./applemusic-like-lyrics/packages/vue'
-
 catalog:
   '@biomejs/biome': ^2.4.8
   '@types/react': ^19.2.14
@@ -33,3 +20,20 @@ catalog:
   vite-plugin-dts: ^4.5.4
   vite-plugin-svgr: ^4.5.0
   vite-plugin-wasm: ^3.6.0
+
+ignoredBuiltDependencies:
+  - '@parcel/watcher'
+  - esbuild
+
+overrides:
+  '@applemusic-like-lyrics/core': link:./applemusic-like-lyrics/packages/core
+  '@applemusic-like-lyrics/fft': link:./applemusic-like-lyrics/packages/fft
+  '@applemusic-like-lyrics/lyric': link:./applemusic-like-lyrics/packages/lyric
+  '@applemusic-like-lyrics/player': link:./applemusic-like-lyrics/packages/player
+  '@applemusic-like-lyrics/player-core': link:./applemusic-like-lyrics/packages/player-core
+  '@applemusic-like-lyrics/react': link:./applemusic-like-lyrics/packages/react
+  '@applemusic-like-lyrics/react-full': link:./applemusic-like-lyrics/packages/react-full
+  '@applemusic-like-lyrics/skia-player': link:./applemusic-like-lyrics/packages/skia-player
+  '@applemusic-like-lyrics/ttml': link:./applemusic-like-lyrics/packages/ttml
+  '@applemusic-like-lyrics/vue': link:./applemusic-like-lyrics/packages/vue
+  '@applemusic-like-lyrics/ws-protocol': link:./applemusic-like-lyrics/packages/ws-protocol

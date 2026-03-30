@@ -1,0 +1,97 @@
+import type { Logger, I18nextToolkitConfig, Plugin, PluginContext, TranslationResult } from '../../types.js';
+import { ASTVisitors } from './ast-visitors.js';
+/**
+ * Main extractor function that runs the complete key extraction and file generation process.
+ *
+ * This is the primary entry point that:
+ * 1. Validates configuration
+ * 2. Sets up default sync options
+ * 3. Finds all translation keys across source files
+ * 4. Generates/updates translation files for all locales
+ * 5. Provides progress feedback via spinner
+ * 6. Returns whether any files were updated
+ *
+ * @param config - The i18next toolkit configuration object
+ * @param logger - Logger instance for output (defaults to ConsoleLogger)
+ * @returns Promise resolving to boolean indicating if any files were updated
+ *
+ * @throws {ExtractorError} When configuration validation fails or extraction process encounters errors
+ *
+ * @example
+ * ```typescript
+ * const config = await loadConfig()
+ * const updated = await runExtractor(config)
+ * if (updated) {
+ *   console.log('Translation files were updated')
+ * }
+ * ```
+ */
+export declare function runExtractor(config: I18nextToolkitConfig, options?: {
+    isWatchMode?: boolean;
+    isDryRun?: boolean;
+    syncPrimaryWithDefaults?: boolean;
+    syncAll?: boolean;
+    quiet?: boolean;
+    logger?: Logger;
+}): Promise<{
+    anyFileUpdated: boolean;
+    hasErrors: boolean;
+}>;
+/**
+ * Processes an individual source file for translation key extraction.
+ *
+ * This function:
+ * 1. Reads the source file
+ * 2. Runs plugin onLoad hooks for code transformation
+ * 3. Parses the code into an Abstract Syntax Tree (AST) using SWC
+ * 4. Extracts keys from comments using regex patterns
+ * 5. Traverses the AST using visitors to find translation calls
+ * 6. Runs plugin onVisitNode hooks for custom extraction logic
+ *
+ * @param file - Path to the source file to process
+ * @param config - The i18next toolkit configuration object
+ * @param logger - Logger instance for output
+ * @param allKeys - Map to accumulate found translation keys
+ *
+ * @throws {ExtractorError} When file processing fails
+ *
+ * @internal
+ */
+export declare function processFile(file: string, plugins: Plugin[], astVisitors: ASTVisitors, pluginContext: PluginContext, config: Omit<I18nextToolkitConfig, 'plugins'>, logger?: Logger, fileErrors?: string[]): Promise<void>;
+/**
+ * Lightweight pre-scan pass for a single file.
+ *
+ * Parses the file and calls `astVisitors.preScanForConstants()` to populate
+ * cross-file shared constant / type-alias / array tables WITHOUT extracting
+ * any translation keys or running plugin hooks.
+ *
+ * Intended to be called for ALL files in a first pass before `processFile` is
+ * called for any file, ensuring that exported identifier references such as
+ * `NS_CALENDAR` from `@core/translations/ns` are resolved in all files
+ * regardless of processing order.
+ *
+ * @param file   - Absolute or CWD-relative path of the source file to pre-scan
+ * @param astVisitors - Shared visitor instance (holds the shared constant tables)
+ * @param config - Extractor configuration (without plugins)
+ * @param logger - Logger for warnings/errors
+ * @param fileErrors - Optional array to collect per-file error messages
+ */
+export declare function preScanFile(file: string, astVisitors: ASTVisitors, config: Omit<I18nextToolkitConfig, 'plugins'>, logger?: Logger, fileErrors?: string[]): Promise<void>;
+/**
+ * Used primarily for testing and programmatic access.
+ *
+ * @param config - The i18next toolkit configuration object
+ * @returns Promise resolving to array of translation results
+ *
+ * @example
+ * ```typescript
+ * const results = await extract(config)
+ * for (const result of results) {
+ *   console.log(`${result.path}: ${result.updated ? 'Updated' : 'No changes'}`)
+ * }
+ * ```
+ */
+export declare function extract(config: I18nextToolkitConfig, { syncPrimaryWithDefaults }?: {
+    syncPrimaryWithDefaults?: boolean;
+}): Promise<TranslationResult[]>;
+//# sourceMappingURL=extractor.d.ts.map

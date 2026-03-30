@@ -1,0 +1,12 @@
+{
+	"compilerOptions": {
+		"target": "ESNext",
+		"moduleResolution": "Node",
+		"allowUmdGlobalAccess": true,
+		"jsx": "react",
+	},
+	"include": [
+		"dummy.ts",
+		"example.tsx",
+	],
+}

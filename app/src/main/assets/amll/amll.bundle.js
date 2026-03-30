@@ -51632,7 +51632,17 @@ void main(void)
     })] });
   });
   const PLAYER_BACKGROUND = "transparent";
+  const ACTIVE_LINE_ALIGN_ANCHOR = "top";
+  const ACTIVE_LINE_ALIGN_POSITION = 0.3;
   const demoAlbumArt = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJyZ2JhKDAsMCwwLDAuMSkiLz48L3N2Zz4=";
+  const DEFAULT_BACKGROUND_CONFIG = {
+    renderer: "pixi",
+    fps: 30,
+    flowSpeed: 2.35,
+    renderScale: 0.9,
+    staticMode: false,
+    lowFreqVolume: 1
+  };
   const DEFAULT_MOTION_CONFIG = {
     enableSpring: true,
     enableBlur: true,
@@ -51671,6 +51681,20 @@ void main(void)
     }
     return Date.now();
   }
+  function toFiniteNumber(value) {
+    const parsed = Number(value);
+    if (!Number.isFinite(parsed)) return void 0;
+    return parsed;
+  }
+  function parseBackgroundRenderer(value) {
+    if (value === void 0 || value === null) return void 0;
+    const rawValue = String(value).trim().toLowerCase();
+    if (rawValue === "pixi") return "pixi";
+    if (rawValue === "mesh" || rawValue === "mesh-gradient" || rawValue === "meshgradient") {
+      return "mesh";
+    }
+    return void 0;
+  }
   function normalizeLyricLines(lines) {
     if (!Array.isArray(lines)) return [];
     return lines.map((line) => {
@@ -51703,12 +51727,15 @@ void main(void)
     const authorityTimeRef = reactExports.useRef(0);
     const authorityAtRef = reactExports.useRef(0);
     const isPlayingRef = reactExports.useRef(false);
+    const isSeekingRef = reactExports.useRef(false);
     const timeRafRef = reactExports.useRef(null);
     const [lyricLines, setLyricLines] = useAtom(Nh);
     const [currentTime, setCurrentTime] = useAtom(jh);
     const [albumUri, setAlbumUri] = useAtom(Dh);
     const [musicIsPlaying, setIsPlaying] = useAtom(Ah);
+    const [isSeeking, setIsSeeking] = reactExports.useState(false);
     const [renderMode, setRenderModeState] = reactExports.useState("dom");
+    const [backgroundConfig, setBackgroundConfig] = reactExports.useState(DEFAULT_BACKGROUND_CONFIG);
     const [motionConfig, setMotionConfig] = reactExports.useState(DEFAULT_MOTION_CONFIG);
     const setLowFreqVolume = useSetAtom(zh);
     reactExports.useEffect(() => {
@@ -51723,31 +51750,20 @@ void main(void)
           authorityTimeRef.current = currentTimeRef.current;
           authorityAtRef.current = getMonotonicTime();
           logToAndroid(`updateLyrics called with ${rawLines.length} raw lines, ${normalizedLines.length} normalized`, "debug");
-          if (normalizedLines.length === 0) {
-            setLyricLines([
-              {
-                words: [{ word: "Demo", startTime: 0, endTime: 2e3 }],
-                translatedLyric: "",
-                romanLyric: "",
-                startTime: 0,
-                endTime: 2e3,
-                isBG: false,
-                isDuet: false
-              }
-            ]);
-          } else {
-            normalizedLines.slice(0, 3).forEach((line, idx) => {
-              logToAndroid(`Line ${idx}: text="${line.words.map((w2) => w2.word).join("")}", words=${line.words.length}, startTime=${line.startTime}, endTime=${line.endTime}`, "debug");
-              line.words.slice(0, 2).forEach((word, wIdx) => {
-                logToAndroid(`  Word ${wIdx}: "${word.word}" ${word.startTime}-${word.endTime}ms`, "debug");
-              });
+          normalizedLines.slice(0, 3).forEach((line, idx) => {
+            logToAndroid(`Line ${idx}: text="${line.words.map((w2) => w2.word).join("")}", words=${line.words.length}, startTime=${line.startTime}, endTime=${line.endTime}`, "debug");
+            line.words.slice(0, 2).forEach((word, wIdx) => {
+              logToAndroid(`  Word ${wIdx}: "${word.word}" ${word.startTime}-${word.endTime}ms`, "debug");
             });
-            setLyricLines(normalizedLines);
-          }
+          });
+          setLyricLines(normalizedLines);
           logToAndroid(`Updated lyrics (${normalizedLines.length} lines)`, "debug");
           if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
             logToAndroid(`Force update LyricPlayer time to ${currentTimeRef.current} after setting lyrics`, "info");
-            playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTimeRef.current), false);
+            playerRef.current.lyricPlayer.setCurrentTime(
+              Math.trunc(currentTimeRef.current),
+              isSeekingRef.current
+            );
             setTimeout(() => {
               if (playerRef.current?.lyricPlayer) {
                 logToAndroid("Triggering mask-image recalculation", "debug");
@@ -51767,7 +51783,7 @@ void main(void)
         currentTimeRef.current = parsedTime;
         setCurrentTime(parsedTime);
         if (playerRef.current?.lyricPlayer) {
-          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), false);
+          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), isSeekingRef.current);
         }
       };
       window.updateAlbumArt = async function(uri2) {
@@ -51789,6 +51805,25 @@ void main(void)
         setIsPlaying(nextPlaying);
         logToAndroid(`Playback ${paused ? "paused" : "resumed"}`, "debug");
       };
+      window.setSeeking = function(seeking) {
+        const nextSeeking = !!seeking;
+        isSeekingRef.current = nextSeeking;
+        setIsSeeking(nextSeeking);
+        logToAndroid(`Seeking state updated: ${nextSeeking}`, "debug");
+      };
+      window.callPlayer = function(method, ...args) {
+        if (method === "setIsSeeking") {
+          window.setSeeking?.(Boolean(args[0]));
+          return;
+        }
+        const corePlayer = playerRef.current?.lyricPlayer;
+        const methodRef = corePlayer?.[method];
+        if (typeof methodRef === "function") {
+          methodRef.apply(corePlayer, args);
+        } else {
+          logToAndroid(`callPlayer ignored unknown method: ${method}`, "warn");
+        }
+      };
       window.configureLyricMotion = function(options) {
         logToAndroid(`configureLyricMotion: ${JSON.stringify(options)}`, "debug");
         setMotionConfig((prev) => ({
@@ -51801,14 +51836,22 @@ void main(void)
       };
       window.configureBackgroundEffect = function(options) {
         logToAndroid(`configureBackgroundEffect: ${JSON.stringify(options)}`, "debug");
-        if (backgroundRender && options.flowSpeed !== void 0) {
-          backgroundRender.setFlowSpeed?.(options.flowSpeed);
-        }
-        if (backgroundRender && options.renderScale !== void 0) {
-          backgroundRender.setRenderScale?.(options.renderScale);
-        }
-        if (backgroundRender && options.lowFreqVolume !== void 0) {
-          setLowFreqVolume(options.lowFreqVolume);
+        const renderer = parseBackgroundRenderer(options?.renderer);
+        const fps = toFiniteNumber(options?.fps);
+        const flowSpeed = toFiniteNumber(options?.flowSpeed);
+        const renderScale = toFiniteNumber(options?.renderScale);
+        const lowFreqVolume = toFiniteNumber(options?.lowFreqVolume);
+        const staticMode = typeof options?.staticMode === "boolean" ? options.staticMode : void 0;
+        setBackgroundConfig((prev) => ({
+          renderer: renderer ?? prev.renderer,
+          fps: fps ?? prev.fps,
+          flowSpeed: flowSpeed ?? prev.flowSpeed,
+          renderScale: renderScale ?? prev.renderScale,
+          staticMode: staticMode ?? prev.staticMode,
+          lowFreqVolume: lowFreqVolume ?? prev.lowFreqVolume
+        }));
+        if (lowFreqVolume !== void 0) {
+          setLowFreqVolume(lowFreqVolume);
         }
       };
       window.setRenderMode = function(mode) {
@@ -51828,6 +51871,8 @@ void main(void)
         delete window.updateTime;
         delete window.updateAlbumArt;
         delete window.setPaused;
+        delete window.setSeeking;
+        delete window.callPlayer;
         delete window.configureLyricMotion;
         delete window.configureBackgroundEffect;
         delete window.setRenderMode;
@@ -51844,13 +51889,16 @@ void main(void)
       authorityAtRef.current = getMonotonicTime();
     }, [musicIsPlaying]);
     reactExports.useEffect(() => {
+      isSeekingRef.current = isSeeking;
+    }, [isSeeking]);
+    reactExports.useEffect(() => {
       const tick = () => {
         const now = getMonotonicTime();
         const base = authorityTimeRef.current;
         const progressed = isPlayingRef.current ? base + (now - authorityAtRef.current) : base;
         currentTimeRef.current = progressed;
         if (playerRef.current?.lyricPlayer) {
-          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), false);
+          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), isSeekingRef.current);
         }
         timeRafRef.current = requestAnimationFrame(tick);
       };
@@ -51876,9 +51924,9 @@ void main(void)
     }, [musicIsPlaying, setIsPlaying]);
     const handleLineClick = (event) => {
       try {
-        const lineData = event.line.getLine();
+        const lineData = event?.line?.getLine?.();
         const startTime = Math.trunc(Number(lineData?.startTime ?? 0));
-        const lineIndex = -1;
+        const lineIndex = Number.isFinite(Number(event?.lineIndex)) ? Math.trunc(Number(event.lineIndex)) : -1;
         if (window.Android?.onLineClick) {
           window.Android.onLineClick(lineIndex, startTime);
           logToAndroid(`Called Android.onLineClick(${lineIndex}, ${startTime})`, "info");
@@ -51887,6 +51935,7 @@ void main(void)
         logToAndroid(`line-click handler error: ${error.message}`, "error");
       }
     };
+    const backgroundRenderer = backgroundConfig.renderer === "mesh" ? de$1 : pe$1;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { id: "app", style: { position: "relative", width: "100%", height: "100vh" }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         _,
@@ -51898,6 +51947,14 @@ void main(void)
             }
           },
           album: albumUri || demoAlbumArt,
+          renderer: backgroundRenderer,
+          fps: backgroundConfig.fps,
+          playing: musicIsPlaying,
+          flowSpeed: backgroundConfig.flowSpeed,
+          renderScale: backgroundConfig.renderScale,
+          staticMode: backgroundConfig.staticMode,
+          lowFreqVolume: backgroundConfig.lowFreqVolume,
+          hasLyric: lyricLines.length > 0,
           style: { position: "absolute", inset: 0, zIndex: 0 }
         }
       ),
@@ -51909,14 +51966,15 @@ void main(void)
           lyricLines,
           currentTime,
           playing: musicIsPlaying,
+          isSeeking,
           disabled: false,
           enableSpring: motionConfig.enableSpring,
           enableBlur: motionConfig.enableBlur,
           enableScale: motionConfig.enableScale,
           hidePassedLines: motionConfig.hidePassedLines,
           wordFadeWidth: motionConfig.wordFadeWidth,
-          alignAnchor: "center",
-          alignPosition: 0.5,
+          alignAnchor: ACTIVE_LINE_ALIGN_ANCHOR,
+          alignPosition: ACTIVE_LINE_ALIGN_POSITION,
           linePosYSpringParams: { mass: 0.9, damping: 15, stiffness: 90 },
           lineScaleSpringParams: { mass: 2, damping: 25, stiffness: 100 },
           onLyricLineClick: handleLineClick,

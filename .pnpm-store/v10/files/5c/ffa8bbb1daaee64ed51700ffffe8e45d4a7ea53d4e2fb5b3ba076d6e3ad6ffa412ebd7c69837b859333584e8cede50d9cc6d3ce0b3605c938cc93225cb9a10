@@ -1,0 +1,47 @@
+{
+	"name": "typedoc-plugin-mark-react-functional-components",
+	"version": "0.2.2",
+	"description": "A plugin for TypeDoc to mark React functional components differently than ordinary functions",
+	"main": "./dist/index.js",
+	"exports": "./dist/index.js",
+	"files": [
+		"src/**",
+		"example/**",
+		"tsconfig.json",
+		"assets/**",
+		"dist/**"
+	],
+	"author": {
+		"name": "Jan Stránský",
+		"url": "https://stranskyjan.cz"
+	},
+	"license": "MIT",
+	"repository": {
+		"type": "git",
+		"url": "https://gitlab.com/stranskyjan/typedoc-plugin-mark-react-functional-components"
+	},
+	"bugs": {
+		"url": "https://gitlab.com/stranskyjan/typedoc-plugin-mark-react-functional-components/issues"
+	},
+	"keywords": [
+		"typedoc",
+		"typedoc-plugin",
+		"react",
+		"functional component"
+	],
+	"dependencies": {},
+	"devDependencies": {
+		"typedoc": "^0.22.15",
+		"react": "^18",
+		"@types/react": "^18",
+		"@types/node": "*",
+		"typescript": "^4.4.3"
+	},
+	"scripts": {
+		"build": "tsc",
+		"postbuild": "for d in css img; do cp -r src/$d dist; done",
+		"test": "typedoc --options example/options.json",
+		"clean": "rm -rf dist/ public/",
+		"prepack": "npm run clean && npm run build"
+	}
+}

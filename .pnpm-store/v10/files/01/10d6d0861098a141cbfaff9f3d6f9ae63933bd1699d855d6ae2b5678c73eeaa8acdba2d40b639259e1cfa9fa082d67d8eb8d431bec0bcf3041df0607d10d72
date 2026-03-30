@@ -1,0 +1,38 @@
+{
+  "name": "typedoc-plugin-vue",
+  "description": "Improves Vue defineComponent and Pinia defineStore display in TypeDoc documentation",
+  "type": "module",
+  "version": "1.5.1",
+  "main": "dist/plugin.js",
+  "license": "MIT",
+  "devDependencies": {
+    "dprint": "^0.49.0",
+    "outdent": "^0.8.0",
+    "pinia": "^3.0.1",
+    "typedoc": "^0.28.0-beta.1",
+    "typescript": "^5.8.2",
+    "vitest": "^3.0.7",
+    "vue": "^3.5.13"
+  },
+  "keywords": [
+    "typedoc-plugin",
+    "vue",
+    "pinia"
+  ],
+  "peerDependencies": {
+    "typedoc": "0.25.x || 0.26.x || 0.27.x || 0.28.x"
+  },
+  "files": [
+    "dist/plugin.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/Gerrit0/typedoc-plugin-vue.git"
+  },
+  "scripts": {
+    "build": "tsc",
+    "lint": "dprint check",
+    "test": "vitest run",
+    "doc": "typedoc --plugin ./dist/plugin.js"
+  }
+}

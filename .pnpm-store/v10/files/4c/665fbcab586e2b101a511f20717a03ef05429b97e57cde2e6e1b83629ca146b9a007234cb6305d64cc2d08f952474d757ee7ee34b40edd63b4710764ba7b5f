@@ -1,0 +1,55 @@
+/**
+ * A bunch of testing code
+ * 
+ * @module
+ */
+
+//import * as React from "react";
+
+export type T = {
+	num: number;
+	str: string;
+};
+
+export interface I {
+	num: number;
+	str: string;
+};
+
+export enum E {
+	A = 1,
+	B = 2,
+}
+
+export const someConstant = Math.PI;
+
+export const someObject = {};
+
+export const someOrdinaryArrowFunction = () => { };
+
+export function someOrdinaryFunction() { }
+
+export function SomeReactFunctionalComponent() { return <div></div>; }
+
+export const SomeReactFunctionalArrowComponent = () => <div></div>;
+
+export function SomeReactFunctionalComponentGeneric<T>() { return <div></div>; }
+
+export function useSomeHook() { }
+
+export const useSomeArrowHook = () => { };
+
+export function useNotHook() { }
+
+export const useNotArrowHook = () => { };
+
+export const SomeNamespace = {
+	function1: () => { },
+	function2() { },
+	Component1() { return <div></div>; },
+	Component2: () => <div></div>,
+	useHook1() { },
+	useHook2: () => { },
+	useNotHook1() { },
+	useNotHook2: () => { },
+};

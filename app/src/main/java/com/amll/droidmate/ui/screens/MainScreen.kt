@@ -138,6 +138,7 @@ fun MainScreen() {
     // always use the darker alpha so light mode matches dark mode
     val cardBg = rippleColor.value.copy(alpha = 0.3f)
     val lyrics by viewModel.lyrics.collectAsState()
+    val rawTtmlContent by viewModel.rawTtmlContent.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
     val songStructures by viewModel.songStructures.collectAsState()
@@ -481,6 +482,7 @@ fun MainScreen() {
                         LyricsVisualLayer(
                             nowPlaying = nowPlaying,
                             lyrics = currentLyrics,
+                            rawTtmlContent = rawTtmlContent,
                             currentTime = lyricTime,
                             webViewReloadKey = webViewReloadKey,
                             onLineSeek = { viewModel.seekTo(it) },
@@ -687,6 +689,7 @@ fun MainScreen() {
                     LyricsVisualLayer(
                         nowPlaying = nowPlaying,
                         lyrics = lyrics,
+                        rawTtmlContent = rawTtmlContent,
                         currentTime = lyricTime,
                         webViewReloadKey = webViewReloadKey,
                         onLineSeek = { viewModel.seekTo(it); resetHideTimer() },
@@ -771,6 +774,7 @@ fun MainScreen() {
 private fun LyricsVisualLayer(
     nowPlaying: NowPlayingMusic?,
     lyrics: TTMLLyrics?,
+    rawTtmlContent: String?,
     currentTime: Long,
     webViewReloadKey: Int,
     onLineSeek: (Long) -> Unit,
@@ -783,11 +787,12 @@ private fun LyricsVisualLayer(
             AsyncImage(model = nowPlaying.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(28.dp).alpha(0.55f))
         }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(0.28f), Color.Black.copy(0.55f), Color.Black.copy(0.68f)))))
-        // only create the WebView if we actually have lyrics; avoids unnecessary page loads
-        if (lyrics != null) {
+        // only create the WebView if we have structured lyrics or raw TTML
+        if (lyrics != null || !rawTtmlContent.isNullOrBlank()) {
             key(webViewReloadKey) {
                 AMLLLyricsView(
                     lyrics = lyrics,
+                    rawTtmlContent = rawTtmlContent,
                     currentTime = currentTime,
                     musicId = nowPlaying?.packageName ?: "",
                     musicName = nowPlaying?.title ?: "Unknown",

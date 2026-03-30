@@ -158,15 +158,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     return null
                 }
                 
-                // 构建 TTML 歌词
-                val ttmlContent = _lyrics.value?.let { lyrics ->
-                    try {
-                        buildTtmlForLyrics(lyrics)
-                    } catch (e: Exception) {
-                        Timber.e("[LyricsMatcher] Failed to build TTML: ${e.message}", e)
-                        null
-                    }
-                }
+                // 构建 TTML 歌词（优先使用原始 TTML）
+                val ttmlContent = this@MainViewModel.resolveCurrentTtmlContent()
                 
                 val state = AMLLWebSocketClient.PlayState(
                     musicId = validMusicId,
@@ -210,6 +203,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     @androidx.annotation.VisibleForTesting(otherwise = androidx.annotation.VisibleForTesting.PRIVATE)
     internal val _lyrics = MutableStateFlow<TTMLLyrics?>(null)
     val lyrics: StateFlow<TTMLLyrics?> = _lyrics
+
+    @androidx.annotation.VisibleForTesting(otherwise = androidx.annotation.VisibleForTesting.PRIVATE)
+    internal val _rawTtmlContent = MutableStateFlow<String?>(null)
+    val rawTtmlContent: StateFlow<String?> = _rawTtmlContent
     
     // 歌曲结构信息
     private val _songStructures = MutableStateFlow<List<SongStructure>>(emptyList())
@@ -380,6 +377,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             val parsed = LyricsRepository.parseTTML(cached.ttmlContent)
                             if (parsed != null) {
                                 _lyrics.value = parsed
+                                _rawTtmlContent.value = if (shouldPreferRawTtmlForDisplay(cached.source)) {
+                                    cached.ttmlContent
+                                } else {
+                                    null
+                                }
                                 updateSongStructures(parsed)
                                 _errorMessage.value = null
                                 Timber.i("[CacheManager] Loaded lyrics from cache (startup): ${cached.title} - ${cached.artist} (${cached.source})")
@@ -398,6 +400,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
                     // 没有可用缓存时再清空并执行网络请求，以避免闪烁的遮罩
                     _lyrics.value = null
+                    _rawTtmlContent.value = null
                     Timber.i("[LyricsMatcher] Music changed, auto-fetching lyrics...")
                     fetchLyrics()
                 }
@@ -433,6 +436,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     val parsed = LyricsRepository.parseTTML(cached.ttmlContent)
                     if (parsed != null) {
                         _lyrics.value = parsed
+                        _rawTtmlContent.value = if (shouldPreferRawTtmlForDisplay(cached.source)) {
+                            cached.ttmlContent
+                        } else {
+                            null
+                        }
                         updateSongStructures(parsed)
                         _errorMessage.value = null
                         Timber.d("[CacheManager] Loaded lyrics from cache: ${cached.title} - ${cached.artist} (${cached.source})")
@@ -456,6 +464,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
             // no usable cache, fall back to network search
             _lyrics.value = null
+            _rawTtmlContent.value = null
             _isLoading.value = true
     
             try {
@@ -470,12 +479,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     
                 if (result.isSuccess && result.lyrics != null) {
                     _lyrics.value = result.lyrics
+                    val resolvedRawTtml = result.rawTtmlContent?.takeIf { it.isNotBlank() }
+                    _rawTtmlContent.value = resolvedRawTtml
                     updateSongStructures(result.lyrics)
+                    val cacheTtml = resolvedRawTtml ?: TTMLConverter.toTTMLString(result.lyrics)
                     lyricsCacheRepository.upsert(
                         title = music.title,
                         artist = music.artist,
                         source = result.source ?: "auto",
-                        ttmlContent = TTMLConverter.toTTMLString(result.lyrics)
+                        ttmlContent = cacheTtml
                     )
                     Timber.i("[LyricsMatcher] Successfully fetched lyrics from ${result.source}")
                         
@@ -543,6 +555,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 )
                 if (ttml != null) {
                     _lyrics.value = ttml
+                    _rawTtmlContent.value = null
                     updateSongStructures(ttml)
                     Timber.i("[CustomLyrics] Successfully converted LRC to TTML")
                 } else {
@@ -572,6 +585,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 
                 var parsed: TTMLLyrics?
                 var cachedTtmlContent: String
+                var rawTtmlForDisplay: String? = null
+                var cacheSource = source
                 
                 when (format) {
                     // ✅ TTML 格式直接解析，保留完整的歌曲结构信息
@@ -581,10 +596,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                             parsed = com.amll.droidmate.data.parser.TTMLParser.parse(trimmed)
                             // ✅ 对于 TTML 格式，直接保存原始内容，避免 toTTMLString 丢失歌曲结构
                             cachedTtmlContent = trimmed
+                            rawTtmlForDisplay = trimmed
+                            cacheSource = if (source.contains("#ttmlraw", ignoreCase = true)) source else "${source}#ttmlraw"
                         } catch (e: Exception) {
                             Timber.e(e, "[TTMLParser] Failed to parse TTML directly")
                             parsed = null
                             cachedTtmlContent = ""
+                            rawTtmlForDisplay = null
                         }
                     }
                     // ✅ 其他格式使用 UnifiedLyricsParser（通过 TTMLConverter.fromLyrics）
@@ -598,17 +616,19 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         )
                         // 非 TTML 格式需要转换后缓存
                         cachedTtmlContent = parsed?.let { TTMLConverter.toTTMLString(it) } ?: ""
+                        rawTtmlForDisplay = null
                     }
                 }
     
                 if (parsed != null && cachedTtmlContent.isNotBlank()) {
                     _lyrics.value = parsed
+                    _rawTtmlContent.value = rawTtmlForDisplay?.takeIf { it.isNotBlank() }
                     updateSongStructures(parsed)
                     _errorMessage.value = null
                     lyricsCacheRepository.upsert(
                         title = if (title.isBlank()) "自选歌词" else title,
                         artist = if (artist.isBlank()) "Unknown" else artist,
-                        source = source,
+                        source = cacheSource,
                         ttmlContent = cachedTtmlContent
                     )
                                     
@@ -755,21 +775,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             Timber.d("[WebSocket] Synced playback progress to WebSocket: ${music.currentPosition}ms")
             
             // ✅ 如果有歌词，发送歌词（仅在歌词变化时）
-            val lyrics = _lyrics.value
-            if (lyrics != null) {
+            val ttmlContent = resolveCurrentTtmlContent()
+            if (!ttmlContent.isNullOrBlank()) {
                 try {
-                    val ttmlContent = buildTtmlForLyrics(lyrics)
-                    if (!ttmlContent.isNullOrBlank()) {
-                        // 计算歌词内容的哈希值，避免重复发送相同内容
-                        val currentHash = ttmlContent.hashCode()
-                        if (currentHash != lastSentLyricsHash) {
-                            webSocketClient.sendLyrics(ttmlContent)
-                            Timber.d("[WebSocket] Synced lyrics to WebSocket (${ttmlContent.length} chars, hash=$currentHash)")
-                            lastSentLyricsHash = currentHash
-                        } else {
-                            // 歌词未变化，跳过发送（减少网络流量）
-                            Timber.v("[WebSocket] Lyrics unchanged, skipping send")
-                        }
+                    // 计算歌词内容的哈希值，避免重复发送相同内容
+                    val currentHash = ttmlContent.hashCode()
+                    if (currentHash != lastSentLyricsHash) {
+                        webSocketClient.sendLyrics(ttmlContent)
+                        Timber.d("[WebSocket] Synced lyrics to WebSocket (${ttmlContent.length} chars, hash=$currentHash)")
+                        lastSentLyricsHash = currentHash
+                    } else {
+                        // 歌词未变化，跳过发送（减少网络流量）
+                        Timber.v("[WebSocket] Lyrics unchanged, skipping send")
                     }
                 } catch (e: Exception) {
                     Timber.e(e, "[WebSocket] Failed to build or send TTML lyrics: ${e.message}")
@@ -884,6 +901,26 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun buildTtmlForLyrics(lyrics: TTMLLyrics): String {
         // ✅ 复用 TTMLConverter.toTTMLString() 统一函数，确保包含翻译和音译
         return com.amll.droidmate.data.converter.TTMLConverter.toTTMLString(lyrics)
+    }
+
+    private fun resolveCurrentTtmlContent(): String? {
+        _rawTtmlContent.value
+            ?.takeIf { it.isNotBlank() }
+            ?.let { return it }
+
+        val currentLyrics = _lyrics.value ?: return null
+        return try {
+            buildTtmlForLyrics(currentLyrics).takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            Timber.e("[LyricsMatcher] Failed to build TTML from structured lyrics: ${e.message}", e)
+            null
+        }
+    }
+
+    private fun shouldPreferRawTtmlForDisplay(source: String?): Boolean {
+        if (source.isNullOrBlank()) return false
+        return source.contains("amll", ignoreCase = true) ||
+            source.contains("#ttmlraw", ignoreCase = true)
     }
     
     /**

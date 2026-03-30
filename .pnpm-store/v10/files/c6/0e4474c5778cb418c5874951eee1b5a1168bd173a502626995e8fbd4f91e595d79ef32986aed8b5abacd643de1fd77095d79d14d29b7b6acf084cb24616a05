@@ -1,0 +1,15 @@
+# Installation
+> `npm install --save @types/w3c-image-capture`
+
+# Summary
+This package contains type definitions for w3c-image-capture (https://www.w3.org/TR/image-capture/).
+
+# Details
+Files were exported from https://github.com/DefinitelyTyped/DefinitelyTyped/tree/master/types/w3c-image-capture.
+
+### Additional Details
+ * Last updated: Mon, 05 May 2025 16:38:54 GMT
+ * Dependencies: [@types/webrtc](https://npmjs.com/package/@types/webrtc)
+
+# Credits
+These definitions were written by [Cosium](https://github.com/cosium).

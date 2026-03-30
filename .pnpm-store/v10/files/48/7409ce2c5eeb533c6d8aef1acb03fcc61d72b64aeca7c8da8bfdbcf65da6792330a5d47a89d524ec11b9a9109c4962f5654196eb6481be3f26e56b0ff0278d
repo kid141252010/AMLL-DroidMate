@@ -1,0 +1,81 @@
+# [typedoc-plugin-mark-react-functional-components](https://www.npmjs.com/package/typedoc-plugin-mark-react-functional-components)
+[![npm](https://img.shields.io/npm/v/typedoc-plugin-mark-react-functional-components)](https://www.npmjs.com/package/typedoc-plugin-mark-react-functional-components)
+
+A plugin for [TypeDoc](https://typedoc.org/) to mark
+[React](https://reactjs.org/)
+[functional components](https://reactjs.org/docs/components-and-props.html)
+differently than ordinary functions.
+
+See [demo](https://stranskyjan.gitlab.io/typedoc-plugin-mark-react-functional-components/)
+(built from
+[this module](https://gitlab.com/stranskyjan/typedoc-plugin-mark-react-functional-components/-/tree/pages/example/example.tsx)
+) or its screenshot:
+
+![demo](https://unpkg.com/typedoc-plugin-mark-react-functional-components@0.2.2/assets/demo.png)
+
+## Overview
+Currently it is a simple `head.end` hook, adding:
+- one `script`
+   - defines `window` `load` event
+   - find functions, whose return type is given `reactReturnType` option
+   - get its "title" name
+   - according to this name, get all relevant "title" elements
+   - add class `react-functional-component` to these relevant elements
+   - find functions whose name matches `/^use[A-Z]/` regexp and add class `react-hook` to these elements
+- one `style`
+   - adjust `.react-functional-component::before` to display react icon
+   - adjust `.react-hook::before` to display react hook icon
+
+
+## Installation
+```
+npm install --save-dev typedoc-plugin-mark-react-functional-components
+```
+
+## Usage
+Plugin should be automaticall detected by TypeDoc.
+If not, see [TypeDoc `plugin` option](https://typedoc.org/guides/options/#plugin).
+
+### Options:
+
+- `reactReturnType` (`string | string[]`)
+
+    Return type of react functional components.
+
+    Typically `Element`, `JSX.Element` or similar.
+
+- `notReactHook` (`string | string[]`, optional)
+
+    By default, mark all functions mathing `/^use[A-Z]/` as react hooks.
+    This option define names, which should be excluded.
+
+- `markReactHooks` (`boolean`, optional, default `true`)
+
+    Mark react hooks or not.
+
+## Compatibility
+tested with [TypeDoc 0.22.15](https://www.npmjs.com/package/typedoc/v/0.22.15) and its **default template**.
+
+## Testing
+- `npm run build`
+- `npm run test`
+- view `public/index.html`
+
+## Contributing
+is welcome :-)
+- via the [GitLab pages of the project](https://gitlab.com/stranskyjan/typedoc-plugin-mark-react-functional-components)
+
+#### Bugs
+[issue tracker](https://gitlab.com/stranskyjan/typedoc-plugin-mark-react-functional-components/issues)
+
+## Maintainer
+[Jan Stránský](https://stranskyjan.cz)
+
+## License
+[MIT](https://opensource.org/licenses/MIT)
+
+## TODO
+- customization?
+- different approach (e.g. full theme, more internal plugin, ...)?
+- other occurrences (e.g. class method returning component)?
+- ... ?

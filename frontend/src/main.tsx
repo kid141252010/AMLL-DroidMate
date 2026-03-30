@@ -1,6 +1,11 @@
 import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { LyricPlayer, BackgroundRender } from '@applemusic-like-lyrics/react'
+import {
+  LyricPlayer,
+  BackgroundRender,
+  MeshGradientRenderer,
+  PixiRenderer,
+} from '@applemusic-like-lyrics/react'
 import type { LyricPlayerRef } from '@applemusic-like-lyrics/react'
 import { DomSlimLyricPlayer } from '@applemusic-like-lyrics/core'
 import '@applemusic-like-lyrics/core/style.css'
@@ -13,12 +18,32 @@ import {
   musicPlayingAtom,
   lowFreqVolumeAtom,
 } from '@applemusic-like-lyrics/react-full'
+import { parseTTML } from '@applemusic-like-lyrics/ttml'
 
 // Minimal Android-specific adaptations
 const PLAYER_BACKGROUND = 'transparent'
 const ACTIVE_LINE_ALIGN_ANCHOR = 'top' as const
 const ACTIVE_LINE_ALIGN_POSITION = 0.3
 const demoAlbumArt = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJyZ2JhKDAsMCwwLDAuMSkiLz48L3N2Zz4='
+type BackgroundRendererKey = 'pixi' | 'mesh'
+
+interface BackgroundConfig {
+  renderer: BackgroundRendererKey
+  fps: number
+  flowSpeed: number
+  renderScale: number
+  staticMode: boolean
+  lowFreqVolume: number
+}
+
+const DEFAULT_BACKGROUND_CONFIG: BackgroundConfig = {
+  renderer: 'pixi',
+  fps: 30,
+  flowSpeed: 2.35,
+  renderScale: 0.9,
+  staticMode: false,
+  lowFreqVolume: 1.0,
+}
 
 interface WordEntry {
   word: string
@@ -100,9 +125,12 @@ declare global {
   interface Window {
     __amll?: AMLLGlobal
     updateLyrics?: (payload: LyricsPayload) => void
+    updateTtmlLyrics?: (ttml: string) => void
     updateTime?: (timeMs: number) => void
     updateAlbumArt?: (uri: string) => Promise<void>
     setPaused?: (paused: boolean) => void
+    setSeeking?: (seeking: boolean) => void
+    callPlayer?: (method: string, ...args: any[]) => void
     configureLyricMotion?: (options: any) => void
     configureBackgroundEffect?: (options: any) => void
     setRenderMode?: (mode: string) => void
@@ -132,6 +160,22 @@ function getMonotonicTime(): number {
     return performance.now()
   }
   return Date.now()
+}
+
+function toFiniteNumber(value: unknown): number | undefined {
+  const parsed = Number(value)
+  if (!Number.isFinite(parsed)) return undefined
+  return parsed
+}
+
+function parseBackgroundRenderer(value: unknown): BackgroundRendererKey | undefined {
+  if (value === undefined || value === null) return undefined
+  const rawValue = String(value).trim().toLowerCase()
+  if (rawValue === 'pixi') return 'pixi'
+  if (rawValue === 'mesh' || rawValue === 'mesh-gradient' || rawValue === 'meshgradient') {
+    return 'mesh'
+  }
+  return undefined
 }
 
 function normalizeLyricLines(lines: any[]): LyricLine[] {
@@ -164,18 +208,54 @@ function normalizeLyricLines(lines: any[]): LyricLine[] {
   })
 }
 
+function normalizeTtmlLyricLines(ttml: string): LyricLine[] {
+  const parsed = parseTTML(ttml) as any
+  const rawLines = Array.isArray(parsed?.lines) ? parsed.lines : []
+
+  return rawLines.map((line: any) => {
+    const words = Array.isArray(line?.words)
+      ? line.words.map((word: any) => ({
+          word: String(word?.word ?? ''),
+          startTime: Number(word?.startTime ?? line?.startTime ?? 0),
+          endTime: Number(word?.endTime ?? line?.endTime ?? line?.startTime ?? 0),
+        }))
+      : []
+
+    if (words.length === 0) {
+      words.push({
+        word: String(line?.text ?? ''),
+        startTime: Number(line?.startTime ?? 0),
+        endTime: Number(line?.endTime ?? line?.startTime ?? 0),
+      })
+    }
+
+    return {
+      words,
+      translatedLyric: String(line?.translatedLyric ?? ''),
+      romanLyric: String(line?.romanLyric ?? ''),
+      startTime: Number(line?.startTime ?? 0),
+      endTime: Number(line?.endTime ?? 0),
+      isBG: !!line?.isBG,
+      isDuet: !!line?.isDuet,
+    }
+  })
+}
+
 function App() {
   const playerRef = useRef<LyricPlayerRef>(null)
   const currentTimeRef = useRef(0)
   const authorityTimeRef = useRef(0)
   const authorityAtRef = useRef(0)
   const isPlayingRef = useRef(false)
+  const isSeekingRef = useRef(false)
   const timeRafRef = useRef<number | null>(null)
   const [lyricLines, setLyricLines] = useAtom(musicLyricLinesAtom)
   const [currentTime, setCurrentTime] = useAtom(musicPlayingPositionAtom)
   const [albumUri, setAlbumUri] = useAtom(musicCoverAtom)
   const [musicIsPlaying, setIsPlaying] = useAtom(musicPlayingAtom)
+  const [isSeeking, setIsSeeking] = useState(false)
   const [renderMode, setRenderModeState] = useState<RenderMode>('dom')
+  const [backgroundConfig, setBackgroundConfig] = useState<BackgroundConfig>(DEFAULT_BACKGROUND_CONFIG)
   const [motionConfig, setMotionConfig] = useState(DEFAULT_MOTION_CONFIG)
   const setLowFreqVolume = useSetAtom(lowFreqVolumeAtom)
 
@@ -197,38 +277,26 @@ function App() {
         authorityAtRef.current = getMonotonicTime()
         
         logToAndroid(`updateLyrics called with ${rawLines.length} raw lines, ${normalizedLines.length} normalized`, 'debug')
-        
-        if (normalizedLines.length === 0) {
-          // Inject placeholder if no lyrics provided
-          setLyricLines([
-            { 
-              words: [{word:'Demo',startTime:0,endTime:2000}],
-              translatedLyric:'',
-              romanLyric:'',
-              startTime:0,
-              endTime:2000,
-              isBG:false,
-              isDuet:false 
-            }
-          ])
-        } else {
-          // Log the first few lines to validate normalization.
-          normalizedLines.slice(0, 3).forEach((line, idx) => {
-            logToAndroid(`Line ${idx}: text="${line.words.map(w => w.word).join('')}", words=${line.words.length}, startTime=${line.startTime}, endTime=${line.endTime}`, 'debug')
-            line.words.slice(0, 2).forEach((word, wIdx) => {
-              logToAndroid(`  Word ${wIdx}: "${word.word}" ${word.startTime}-${word.endTime}ms`, 'debug')
-            })
+
+        // Log the first few lines to validate normalization.
+        normalizedLines.slice(0, 3).forEach((line, idx) => {
+          logToAndroid(`Line ${idx}: text="${line.words.map(w => w.word).join('')}", words=${line.words.length}, startTime=${line.startTime}, endTime=${line.endTime}`, 'debug')
+          line.words.slice(0, 2).forEach((word, wIdx) => {
+            logToAndroid(`  Word ${wIdx}: "${word.word}" ${word.startTime}-${word.endTime}ms`, 'debug')
           })
-          
-          setLyricLines(normalizedLines)
-        }
+        })
+
+        setLyricLines(normalizedLines)
         
         logToAndroid(`Updated lyrics (${normalizedLines.length} lines)`, 'debug')
         
         // Re-apply current time after lyrics land so the player can snap to the active line.
         if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
           logToAndroid(`Force update LyricPlayer time to ${currentTimeRef.current} after setting lyrics`, 'info')
-          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTimeRef.current), false)
+          playerRef.current.lyricPlayer.setCurrentTime(
+            Math.trunc(currentTimeRef.current),
+            isSeekingRef.current,
+          )
               
           // Trigger one extra layout tick so mask-based word highlighting recalculates.
           setTimeout(() => {
@@ -243,6 +311,35 @@ function App() {
       }
     }
 
+    window.updateTtmlLyrics = function (ttml: string) {
+      try {
+        const ttmlText = String(ttml ?? '')
+        const normalizedLines = normalizeTtmlLyricLines(ttmlText)
+        authorityTimeRef.current = currentTimeRef.current
+        authorityAtRef.current = getMonotonicTime()
+
+        logToAndroid(`updateTtmlLyrics called, parsed ${normalizedLines.length} lines`, 'debug')
+        normalizedLines.slice(0, 3).forEach((line, idx) => {
+          logToAndroid(
+            `TTML Line ${idx}: text="${line.words.map(w => w.word).join('')}", words=${line.words.length}, startTime=${line.startTime}, endTime=${line.endTime}`,
+            'debug',
+          )
+        })
+
+        setLyricLines(normalizedLines)
+        logToAndroid(`Updated TTML lyrics (${normalizedLines.length} lines)`, 'debug')
+
+        if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
+          playerRef.current.lyricPlayer.setCurrentTime(
+            Math.trunc(currentTimeRef.current),
+            isSeekingRef.current,
+          )
+        }
+      } catch (error) {
+        logToAndroid(`updateTtmlLyrics error: ${(error as Error).message}`, 'error')
+      }
+    }
+
     window.updateTime = function (timeMs: number) {
       const parsedTime = Number(timeMs)
       if (!Number.isFinite(parsedTime)) return
@@ -253,7 +350,7 @@ function App() {
       setCurrentTime(parsedTime)
       // Keep the core player in sync immediately, not just through React state.
       if (playerRef.current?.lyricPlayer) {
-        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), false)
+        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), isSeekingRef.current)
       }
     }
 
@@ -281,6 +378,28 @@ function App() {
       logToAndroid(`Playback ${paused ? 'paused' : 'resumed'}`, 'debug')
     }
 
+    window.setSeeking = function (seeking: boolean) {
+      const nextSeeking = !!seeking
+      isSeekingRef.current = nextSeeking
+      setIsSeeking(nextSeeking)
+      logToAndroid(`Seeking state updated: ${nextSeeking}`, 'debug')
+    }
+
+    window.callPlayer = function (method: string, ...args: any[]) {
+      if (method === 'setIsSeeking') {
+        window.setSeeking?.(Boolean(args[0]))
+        return
+      }
+
+      const corePlayer = playerRef.current?.lyricPlayer as Record<string, any> | undefined
+      const methodRef = corePlayer?.[method]
+      if (typeof methodRef === 'function') {
+        methodRef.apply(corePlayer, args)
+      } else {
+        logToAndroid(`callPlayer ignored unknown method: ${method}`, 'warn')
+      }
+    }
+
     window.configureLyricMotion = function (options: any) {
       logToAndroid(`configureLyricMotion: ${JSON.stringify(options)}`, 'debug')
       setMotionConfig((prev) => ({
@@ -296,14 +415,24 @@ function App() {
 
     window.configureBackgroundEffect = function (options: any) {
       logToAndroid(`configureBackgroundEffect: ${JSON.stringify(options)}`, 'debug')
-      if (backgroundRender && options.flowSpeed !== undefined) {
-        backgroundRender.setFlowSpeed?.(options.flowSpeed)
-      }
-      if (backgroundRender && options.renderScale !== undefined) {
-        backgroundRender.setRenderScale?.(options.renderScale)
-      }
-      if (backgroundRender && options.lowFreqVolume !== undefined) {
-        setLowFreqVolume(options.lowFreqVolume)
+      const renderer = parseBackgroundRenderer(options?.renderer)
+      const fps = toFiniteNumber(options?.fps)
+      const flowSpeed = toFiniteNumber(options?.flowSpeed)
+      const renderScale = toFiniteNumber(options?.renderScale)
+      const lowFreqVolume = toFiniteNumber(options?.lowFreqVolume)
+      const staticMode = typeof options?.staticMode === 'boolean' ? options.staticMode : undefined
+
+      setBackgroundConfig((prev) => ({
+        renderer: renderer ?? prev.renderer,
+        fps: fps ?? prev.fps,
+        flowSpeed: flowSpeed ?? prev.flowSpeed,
+        renderScale: renderScale ?? prev.renderScale,
+        staticMode: staticMode ?? prev.staticMode,
+        lowFreqVolume: lowFreqVolume ?? prev.lowFreqVolume,
+      }))
+
+      if (lowFreqVolume !== undefined) {
+        setLowFreqVolume(lowFreqVolume)
       }
     }
 
@@ -323,9 +452,12 @@ function App() {
 
     return () => {
       delete window.updateLyrics
+      delete window.updateTtmlLyrics
       delete window.updateTime
       delete window.updateAlbumArt
       delete window.setPaused
+      delete window.setSeeking
+      delete window.callPlayer
       delete window.configureLyricMotion
       delete window.configureBackgroundEffect
       delete window.setRenderMode
@@ -345,6 +477,10 @@ function App() {
   }, [musicIsPlaying])
 
   useEffect(() => {
+    isSeekingRef.current = isSeeking
+  }, [isSeeking])
+
+  useEffect(() => {
     const tick = () => {
       const now = getMonotonicTime()
       const base = authorityTimeRef.current
@@ -352,7 +488,7 @@ function App() {
       currentTimeRef.current = progressed
 
       if (playerRef.current?.lyricPlayer) {
-        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), false)
+        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), isSeekingRef.current)
       }
 
       timeRafRef.current = requestAnimationFrame(tick)
@@ -385,9 +521,11 @@ function App() {
 
   const handleLineClick = (event: any) => {
     try {
-      const lineData = event.line.getLine()
+      const lineData = event?.line?.getLine?.()
       const startTime = Math.trunc(Number(lineData?.startTime ?? 0))
-      const lineIndex = -1
+      const lineIndex = Number.isFinite(Number(event?.lineIndex))
+        ? Math.trunc(Number(event.lineIndex))
+        : -1
       
       if (window.Android?.onLineClick) {
         window.Android.onLineClick(lineIndex, startTime)
@@ -397,6 +535,10 @@ function App() {
       logToAndroid(`line-click handler error: ${(error as Error).message}`, 'error')
     }
   }
+
+  const backgroundRenderer = backgroundConfig.renderer === 'mesh'
+    ? MeshGradientRenderer
+    : PixiRenderer
 
   return (
     <div id="app" style={{ position: 'relative', width: '100%', height: '100vh' }}>
@@ -408,6 +550,14 @@ function App() {
           }
         }}
         album={albumUri || demoAlbumArt}
+        renderer={backgroundRenderer}
+        fps={backgroundConfig.fps}
+        playing={musicIsPlaying}
+        flowSpeed={backgroundConfig.flowSpeed}
+        renderScale={backgroundConfig.renderScale}
+        staticMode={backgroundConfig.staticMode}
+        lowFreqVolume={backgroundConfig.lowFreqVolume}
+        hasLyric={lyricLines.length > 0}
         style={{ position: 'absolute', inset: 0, zIndex: 0 }}
       />
 
@@ -417,6 +567,7 @@ function App() {
         lyricLines={lyricLines}
         currentTime={currentTime}
         playing={musicIsPlaying}
+        isSeeking={isSeeking}
         disabled={false}
         enableSpring={motionConfig.enableSpring}
         enableBlur={motionConfig.enableBlur}

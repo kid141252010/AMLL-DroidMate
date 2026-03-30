@@ -14,9 +14,11 @@
   "license": "ISC",
   "type": "commonjs",
   "dependencies": {
+    "@applemusic-like-lyrics/core": "file:../applemusic-like-lyrics/packages/core",
+    "@applemusic-like-lyrics/lyric": "file:../applemusic-like-lyrics/packages/lyric",
     "@applemusic-like-lyrics/react": "file:../applemusic-like-lyrics/packages/react",
     "@applemusic-like-lyrics/react-full": "file:../applemusic-like-lyrics/packages/react-full",
-    "@applemusic-like-lyrics/core": "file:../applemusic-like-lyrics/packages/core",
+    "@applemusic-like-lyrics/ttml": "file:../applemusic-like-lyrics/packages/ttml",
     "@pixi/core": "^7.4.3",
     "@pixi/utils": "^7.4.3",
     "@vitejs/plugin-react": "^5.1.4",
@@ -28,7 +30,9 @@
   "devDependencies": {
     "@types/react": "^18.2.0",
     "@types/react-dom": "^18.2.0",
+    "rollup": "4.60.1",
     "terser": "^5.46.1",
-    "typescript": "^5.3.0"
+    "typescript": "^5.3.0",
+    "vite-plugin-wasm": "^3.6.0"
   }
 }

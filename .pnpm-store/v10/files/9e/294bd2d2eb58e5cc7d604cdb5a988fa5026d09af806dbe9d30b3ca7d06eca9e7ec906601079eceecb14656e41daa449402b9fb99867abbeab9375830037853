@@ -1,0 +1,149 @@
+/*
+## Overview
+Currently it is a simple `head.end` hook, adding:
+- one `script`
+   - defines `window` `load` event
+   - find functions, whose return type is given `reactReturnType` option
+   - get its "title" name
+   - according to this name, get all relevant "title" elements
+   - add class react-functional-component to these relevant elements
+- one `style`
+   - adjust `.react-functional-component::before` to display react icon
+*/
+
+import { JSX, ParameterType } from "typedoc";
+import type { Application } from "typedoc";
+import { readFileSync } from "fs";
+import { join as pathJoin } from "path";
+
+function getFunctionBody(f: Function) {
+	return (f.toString().match(/(?<=\{)[\s\S]*(?=\})/) ?? [])[0];
+}
+
+function markReactFunctionalComponents() {
+	window.addEventListener("load", () => {
+		// aux function to get function name from element
+		const elem2functionName = (elem: HTMLElement) => (elem.innerText.match(/^[^\s\(:<]*/) ?? [])[0];
+		const querySelectorAll = (arg: string, elem = document.body) => Array.from(elem.querySelectorAll(arg)) as HTMLElement[];
+		const addReactComponent = (elem: HTMLElement) => {
+			elem.classList.add("react-functional-component");
+		};
+		const addReactHook = (elem: HTMLElement) => {
+			elem.classList.add("react-hook");
+		};
+		// elements containing return types of all functions
+		const returns = querySelectorAll("h4.tsd-returns-title .tsd-signature-type");
+		// filter reactReturn
+		const reactReturnTypes = "REACT_RETURN_TYPE" as unknown as string[];
+		const reactReturns = returns.filter(e => reactReturnTypes.some(r => e.innerText === r));
+		var names = [] as string[];
+		reactReturns.forEach(reactReturn => {
+			// closest section, for ordinary functions it contains function definitions
+			var elem = reactReturn.closest("section") as HTMLElement;
+			if (elem.classList.contains("tsd-kind-variable")) {
+				// section is object, get "closer" function definition
+				elem = reactReturn.closest("li.tsd-parameter") as HTMLElement;
+				const fundef = elem.querySelector("ul li.tsd-signature.tsd-kind-icon") as HTMLElement;
+				// add react class directly
+				addReactComponent(fundef);
+			} else {
+				const name = elem2functionName(elem);
+				// only "remember" name
+				names.push(name);
+			}
+		});
+		const reactComponents = new Set(names);
+		const notReactHook = new Set("NOT_REACT_HOOK");
+		const markReactHooks = "MARK_REACT_HOOKS" as unknown as boolean;
+		//
+		// select all relevant possible elements
+		const ifuns = querySelectorAll(".tsd-index-panel li.tsd-kind-function a.tsd-kind-icon");
+		const cfuns = querySelectorAll(".col-content section.tsd-kind-function ul li.tsd-signature.tsd-kind-icon");
+		const mfuns = querySelectorAll(".col-menu ul li.tsd-kind-function a.tsd-kind-icon");
+		const funs = [...ifuns, ...cfuns, ...mfuns];
+		// for each, get function name and if present in relevant names, add react class
+		funs.forEach(fun => {
+			const name = elem2functionName(fun);
+			if (reactComponents.has(name)) addReactComponent(fun);
+			if (markReactHooks && name.match(/^use[A-Z]/) && !notReactHook.has(name)) addReactHook(fun);
+		});
+		// legend
+		const legendFunction = document.body.querySelector("footer div.container div.tsd-legend-group ul.tsd-legend li.tsd-kind-function") as HTMLElement;
+		if (legendFunction) {
+			let span: HTMLSpanElement;
+			let ul = legendFunction.parentElement as HTMLElement;
+			//
+			const extraLegend = [
+				["React functional component", addReactComponent],
+				["React hook", addReactHook],
+			] as [string, (elem: HTMLElement) => void][];
+			extraLegend.forEach(([label, addClass]) => {
+				let li = document.createElement("li");
+				span = document.createElement("span");
+				li.appendChild(span);
+				span.classList.add("tsd-kind-icon");
+				span.innerText = label;
+				addClass(span);
+				ul.appendChild(li);
+			});
+		}
+	});
+}
+
+const js1 = (
+	reactReturn: string[],
+	notReactHook: string[],
+	markReactHooks: boolean,
+) => getFunctionBody(markReactFunctionalComponents)
+	.replaceAll('"REACT_RETURN_TYPE"', JSON.stringify(reactReturn))
+	.replaceAll('"NOT_REACT_HOOK"', JSON.stringify(notReactHook))
+	.replaceAll('"MARK_REACT_HOOKS"', JSON.stringify(markReactHooks));
+
+const [reactLogo, reactHookLogo] = ["react-logo", "react-hook-logo"].map(fBase => {
+	const svg = fBase + ".svg";
+	const fContent = readFileSync(pathJoin(__dirname, "img", svg));
+	const base64 = fContent.toString("base64");
+	const url = `data:image/svg+xml;base64,${base64}`;
+	return url;
+});
+
+const css = readFileSync(pathJoin(__dirname, "css", "main.css"), { encoding: "utf8" })
+	.replace("REACT_LOGO", reactLogo)
+	.replace("REACT_HOOK_LOGO", reactHookLogo);
+
+export function load(app: Application) {
+	app.options.addDeclaration({
+		name: "reactReturnType",
+		help: "Return type of react functional components. Typically `Element`, `JSX.Element` or similar.",
+		type: ParameterType.Array | ParameterType.String,
+		defaultValue: "",
+	});
+	app.options.addDeclaration({
+		name: "notReactHook",
+		help: "By default, mark all functions mathing `/^use[A-Z]/` as react hooks. This option define names, which should be excluded.",
+		type: ParameterType.Array | ParameterType.String,
+		defaultValue: [],
+	});
+	app.options.addDeclaration({
+		name: "markReactHooks",
+		help: "Mark react hooks or not.",
+		type: ParameterType.Boolean,
+		defaultValue: true,
+	});
+	//
+	app.renderer.hooks.on("head.end", () => {
+		var reactReturn = app.options.getValue("reactReturnType") as string | string[];
+		if (typeof reactReturn === "string") reactReturn = [reactReturn];
+		var notReactHook = app.options.getValue("notReactHook") as string | string[];
+		if (typeof notReactHook === "string") notReactHook = [notReactHook];
+		const markReactHooks = app.options.getValue("markReactHooks") as boolean;
+		return <>
+			<script>
+				<JSX.Raw html={js1(reactReturn, notReactHook, markReactHooks)} />
+			</script>
+			<style>
+				<JSX.Raw html={css} />
+			</style>
+		</>;
+	});
+};

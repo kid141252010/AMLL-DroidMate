@@ -1,0 +1,45 @@
+{
+  "name": "corner-smoothing",
+  "description": "Squircles for the web.",
+  "version": "0.1.5",
+  "license": "MIT",
+  "homepage": "https://github.com/sanalabs/corner-smoothing#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/sanalabs/corner-smoothing.git"
+  },
+  "author": "Viktor Qvarfordt",
+  "main": "./dist/cjs/index.js",
+  "module": "./dist/esm/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    "import": "./dist/esm/index.js",
+    "require": "./dist/cjs/index.js",
+    "default": "./dist/esm/index.js"
+  },
+  "files": [
+    "src/**/*",
+    "dist/**/*.js",
+    "dist/**/*.js.map",
+    "dist/**/*.d.ts",
+    "dist/**/*.d.ts.map"
+  ],
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc & tsc --project tsconfig.cjs.json",
+    "watch": "tsc-watch --onSuccess \"yalc push\""
+  },
+  "dependencies": {
+    "figma-squircle": "^0.3.0"
+  },
+  "peerDependencies": {
+    "react": "*"
+  },
+  "devDependencies": {
+    "@types/node": "18.0.3",
+    "@types/react": "18.0.15",
+    "tsc-watch": "^5.0.3",
+    "typescript": "4.7.4"
+  },
+  "packageManager": "yarn@3.2.1"
+}

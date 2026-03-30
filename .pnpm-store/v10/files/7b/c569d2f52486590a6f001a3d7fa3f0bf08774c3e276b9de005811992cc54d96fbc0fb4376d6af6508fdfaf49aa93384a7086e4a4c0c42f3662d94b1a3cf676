@@ -1,0 +1,5 @@
+const data = {
+	"body": "<path fill=\"currentColor\" d=\"M14 11.5a2.5 2.5 0 0 1-2.5 2.5h-7A2.5 2.5 0 0 1 2 11.5v-7A2.5 2.5 0 0 1 4.5 2h7A2.5 2.5 0 0 1 14 4.5v7Zm-8-6a.5.5 0 0 0-1 0v5a.5.5 0 0 0 1 0v-5Zm2.5 0a.5.5 0 0 0-1 0v5a.5.5 0 0 0 1 0v-5Zm2.5 0a.5.5 0 0 0-1 0v5a.5.5 0 0 0 1 0v-5Z\"/>"
+};
+exports.__esModule = true;
+exports.default = data;

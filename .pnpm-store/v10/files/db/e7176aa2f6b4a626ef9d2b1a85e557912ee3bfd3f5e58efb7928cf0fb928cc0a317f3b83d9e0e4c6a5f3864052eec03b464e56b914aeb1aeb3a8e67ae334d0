@@ -1,0 +1,16 @@
+"use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.default = jotaiPreset;
+const plugin_debug_label_js_1 = __importDefault(require("./plugin-debug-label.js"));
+const plugin_react_refresh_js_1 = __importDefault(require("./plugin-react-refresh.js"));
+function jotaiPreset(_, options) {
+    return {
+        plugins: [
+            [plugin_debug_label_js_1.default, options],
+            [plugin_react_refresh_js_1.default, options],
+        ],
+    };
+}

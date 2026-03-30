@@ -1,0 +1,8 @@
+import type { Decimal } from "@formatjs/bigdecimal";
+import { type NumberFormatInternal } from "../types/number.js";
+/**
+* The abstract operation ComputeExponentForMagnitude computes an exponent by which to scale a
+* number of the given magnitude (power of ten of the most significant digit) according to the
+* locale and the desired notation (scientific, engineering, or compact).
+*/
+export declare function ComputeExponentForMagnitude(internalSlots: NumberFormatInternal, magnitude: Decimal): number;

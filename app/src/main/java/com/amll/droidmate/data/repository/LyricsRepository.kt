@@ -72,6 +72,11 @@ open class LyricsRepository(
     @Volatile
     private var lastAmlLError: String? = null
 
+    private data class AmllyricFetchPayload(
+        val lyrics: TTMLLyrics,
+        val rawTtmlContent: String
+    )
+
     /**
      * 从 QQ 音乐搜索歌词
      */
@@ -1700,6 +1705,14 @@ open class LyricsRepository(
         title: String? = null,
         artist: String? = null
     ): TTMLLyrics? {
+        return getAMLLLyricsPayload(songId, title, artist)?.lyrics
+    }
+
+    private suspend fun getAMLLLyricsPayload(
+        songId: String,
+        title: String? = null,
+        artist: String? = null
+    ): AmllyricFetchPayload? {
         // allow callers to pass a platform prefix (e.g. "qq:12345") or omit for
         // backwards compatibility.  default platform is ncm (网易云).
         // If the "songId" is a direct URL (from AMLL search "file" field), we treat it as
@@ -1791,7 +1804,10 @@ open class LyricsRepository(
                         )
                         Timber.i("[AMLLBridge] Fetched AMLL lyrics from: $url")
                         lastAmlLError = null
-                        return withSource
+                        return AmllyricFetchPayload(
+                            lyrics = withSource,
+                            rawTtmlContent = content
+                        )
                     }
 
                     Timber.w("[AMLLBridge] TTML parse yielded empty result: $url")
@@ -2056,8 +2072,19 @@ open class LyricsRepository(
         return LyricsResult(
             isSuccess = true,
             lyrics = parsed,
-            source = entry.source
+            source = entry.source,
+            rawTtmlContent = if (shouldPreferRawTtmlForDisplay(entry.source)) {
+                entry.ttmlContent
+            } else {
+                null
+            }
         )
+    }
+
+    private fun shouldPreferRawTtmlForDisplay(source: String?): Boolean {
+        if (source.isNullOrBlank()) return false
+        return source.contains("amll", ignoreCase = true) ||
+            source.contains("#ttmlraw", ignoreCase = true)
     }
 
     suspend fun getLyrics(
@@ -2068,8 +2095,13 @@ open class LyricsRepository(
     ): LyricsResult {
         return try {
             val normalizedProvider = provider.lowercase()
+            val amllPayload = if (normalizedProvider == "amll") {
+                getAMLLLyricsPayload(songId, title, artist)
+            } else {
+                null
+            }
             val lyrics = when (normalizedProvider) {
-                "amll" -> getAMLL_TTMLLyrics(songId, title, artist)
+                "amll" -> amllPayload?.lyrics
                 "netease", "ncm" -> getNeteaseLyrics(songId, title, artist)
                 "qq", "qqmusic" -> getQQMusicLyrics(songId, title, artist)
                 "kugou" -> getKugouLyrics(songId, title, artist)
@@ -2086,7 +2118,8 @@ open class LyricsRepository(
                 LyricsResult(
                     isSuccess = true,
                     lyrics = lyrics,
-                    source = provider.uppercase()
+                    source = provider.uppercase(),
+                    rawTtmlContent = amllPayload?.rawTtmlContent
                 )
             } else {
                 LyricsResult(
