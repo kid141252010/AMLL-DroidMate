@@ -51665,6 +51665,12 @@ void main(void)
       console.log(`[${level.toUpperCase()}] ${message}`);
     }
   }
+  function getMonotonicTime() {
+    if (typeof performance !== "undefined" && typeof performance.now === "function") {
+      return performance.now();
+    }
+    return Date.now();
+  }
   function normalizeLyricLines(lines) {
     if (!Array.isArray(lines)) return [];
     return lines.map((line) => {
@@ -51694,6 +51700,10 @@ void main(void)
   function App() {
     const playerRef = reactExports.useRef(null);
     const currentTimeRef = reactExports.useRef(0);
+    const authorityTimeRef = reactExports.useRef(0);
+    const authorityAtRef = reactExports.useRef(0);
+    const isPlayingRef = reactExports.useRef(false);
+    const timeRafRef = reactExports.useRef(null);
     const [lyricLines, setLyricLines] = useAtom(Nh);
     const [currentTime, setCurrentTime] = useAtom(jh);
     const [albumUri, setAlbumUri] = useAtom(Dh);
@@ -51710,6 +51720,8 @@ void main(void)
         try {
           const rawLines = Array.isArray(payload?.lines) ? payload.lines : [];
           const normalizedLines = normalizeLyricLines(rawLines);
+          authorityTimeRef.current = currentTimeRef.current;
+          authorityAtRef.current = getMonotonicTime();
           logToAndroid(`updateLyrics called with ${rawLines.length} raw lines, ${normalizedLines.length} normalized`, "debug");
           if (normalizedLines.length === 0) {
             setLyricLines([
@@ -51749,6 +51761,9 @@ void main(void)
       };
       window.updateTime = function(timeMs) {
         const parsedTime = Number(timeMs);
+        if (!Number.isFinite(parsedTime)) return;
+        authorityTimeRef.current = parsedTime;
+        authorityAtRef.current = getMonotonicTime();
         currentTimeRef.current = parsedTime;
         setCurrentTime(parsedTime);
         if (playerRef.current?.lyricPlayer) {
@@ -51767,7 +51782,11 @@ void main(void)
         }
       };
       window.setPaused = function(paused) {
-        setIsPlaying(!paused);
+        const nextPlaying = !paused;
+        isPlayingRef.current = nextPlaying;
+        authorityTimeRef.current = currentTimeRef.current;
+        authorityAtRef.current = getMonotonicTime();
+        setIsPlaying(nextPlaying);
         logToAndroid(`Playback ${paused ? "paused" : "resumed"}`, "debug");
       };
       window.configureLyricMotion = function(options) {
@@ -51815,8 +51834,35 @@ void main(void)
       };
     }, [setLyricLines, setCurrentTime, setAlbumUri, setIsPlaying, setLowFreqVolume]);
     reactExports.useEffect(() => {
+      authorityTimeRef.current = currentTime;
+      authorityAtRef.current = getMonotonicTime();
       currentTimeRef.current = currentTime;
     }, [currentTime]);
+    reactExports.useEffect(() => {
+      isPlayingRef.current = musicIsPlaying;
+      authorityTimeRef.current = currentTimeRef.current;
+      authorityAtRef.current = getMonotonicTime();
+    }, [musicIsPlaying]);
+    reactExports.useEffect(() => {
+      const tick = () => {
+        const now = getMonotonicTime();
+        const base = authorityTimeRef.current;
+        const progressed = isPlayingRef.current ? base + (now - authorityAtRef.current) : base;
+        currentTimeRef.current = progressed;
+        if (playerRef.current?.lyricPlayer) {
+          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), false);
+        }
+        timeRafRef.current = requestAnimationFrame(tick);
+      };
+      authorityAtRef.current = getMonotonicTime();
+      timeRafRef.current = requestAnimationFrame(tick);
+      return () => {
+        if (timeRafRef.current !== null) {
+          cancelAnimationFrame(timeRafRef.current);
+          timeRafRef.current = null;
+        }
+      };
+    }, []);
     reactExports.useEffect(() => {
       if (window.Android?.isPlaying) {
         try {
@@ -51880,6 +51926,7 @@ void main(void)
             zIndex: 1,
             width: "100%",
             height: "100%",
+            fontFamily: "var(--amll-lp-font-family, system-ui)",
             background: PLAYER_BACKGROUND
           }
         }

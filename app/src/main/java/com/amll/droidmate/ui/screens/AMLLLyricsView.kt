@@ -33,7 +33,6 @@ import java.io.File
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
-import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
@@ -584,7 +583,8 @@ fun AMLLLyricsView(
                         id = item.id,
                         sortKey = item.fontFamilyName,
                         familyName = buildRuntimeFontFamilyName(item.fontFamilyName, item.id),
-                        uri = file.toURI().toString()
+                        sourcePath = file.absolutePath,
+                        sourceKey = "${file.absolutePath}:${file.lastModified()}:${file.length()}"
                     )
                 }
 
@@ -610,13 +610,20 @@ fun AMLLLyricsView(
             val fontSignature = buildString {
                 append(effectiveFamily)
                 append("|")
-                append(fontFiles.joinToString(";") { "${it.id}:${it.familyName}:${it.uri}" })
+                append(fontFiles.joinToString(";") { "${it.id}:${it.familyName}:${it.sourceKey}" })
                 append("|")
                 append(enabledFamilies.joinToString(","))
             }
 
             if (lastFontConfigSignature != fontSignature) {
-                val script = buildApplyFontScript(effectiveFamily, fontFiles)
+                val scriptEntries = fontFiles.mapNotNull { entry ->
+                    val dataUrl = convertFontFileToDataUrl(File(entry.sourcePath)) ?: return@mapNotNull null
+                    FontScriptEntry(
+                        familyName = entry.familyName,
+                        uri = dataUrl
+                    )
+                }
+                val script = buildApplyFontScript(effectiveFamily, scriptEntries)
                 Timber.d(
                     "[AMLLLyrics] [$debugSource#$instanceId] Bridge call: applyFontSettings(enabled=${enabledFamilies.size}, files=${fontFiles.size})"
                 )
@@ -639,6 +646,12 @@ fun AMLLLyricsView(
 private data class FontWebEntry(
     val id: String,
     val sortKey: String,
+    val familyName: String,
+    val sourcePath: String,
+    val sourceKey: String
+)
+
+private data class FontScriptEntry(
     val familyName: String,
     val uri: String
 )
@@ -676,7 +689,7 @@ private fun normalizeFontToken(value: String): String {
         .replace(Regex("[^a-z0-9]"), "")
 }
 
-private fun buildApplyFontScript(effectiveFamily: String, files: List<FontWebEntry>): String {
+private fun buildApplyFontScript(effectiveFamily: String, files: List<FontScriptEntry>): String {
     // 将字体家族名称转换为 JSON 安全的字符串
     val familyJson = "\"${escapeJsStringForJson(effectiveFamily)}\""
     
@@ -685,7 +698,7 @@ private fun buildApplyFontScript(effectiveFamily: String, files: List<FontWebEnt
         "[]"
     } else {
         val filesEntries = files.joinToString(",") { entry ->
-            "{id:\"${escapeJsStringForJson(entry.id)}\",familyName:\"${escapeJsStringForJson(entry.familyName)}\",uri:\"${escapeJsStringForJson(entry.uri)}\"}"
+            "{familyName:\"${escapeJsStringForJson(entry.familyName)}\",uri:\"${escapeJsStringForJson(entry.uri)}\"}"
         }
         "[$filesEntries]"
     }
@@ -698,12 +711,10 @@ private fun buildApplyFontScript(effectiveFamily: String, files: List<FontWebEnt
         append("var styleNode=document.getElementById(styleId);")
         append("if(!styleNode){styleNode=document.createElement('style');styleNode.id=styleId;document.head.appendChild(styleNode);}")
         append("var css='';")
-        append("for(var i=0;i<files.length;i+=1){var item=files[i];if(!item||!item.familyName||!item.uri)continue;if(item.uri.indexOf('data:image/svg+xml')===0)continue;css+='@font-face{font-family:\"'+item.familyName+'\";src:url(\"'+item.uri+'\");font-display:swap;}';}")
+        append("for(var i=0;i<files.length;i+=1){var item=files[i];if(!item||!item.familyName||!item.uri)continue;css+='@font-face{font-family:\"'+item.familyName+'\";src:url(\"'+item.uri+'\");font-display:swap;}';}")
         append("styleNode.textContent=css;")
         append("document.documentElement.style.setProperty('--amll-user-font-family',effectiveFamily);")
         append("document.documentElement.style.setProperty('--amll-lp-font-family','var(--amll-user-font-family)');")
-        append("var players=document.querySelectorAll('.amll-lyric-player');")
-        append("for(var j=0;j<players.length;j+=1){players[j].style.fontFamily='var(--amll-lp-font-family)';}")
         append("})();")
     }
 }
@@ -855,6 +866,28 @@ class AMLLInterface(
         } catch (e: Exception) {
             Timber.e("[WebView] [$debugSource#$instanceId] 发送 WebSocket 消息失败", e)
         }
+    }
+}
+
+private fun convertFontFileToDataUrl(file: File): String? {
+    return try {
+        val bytes = file.readBytes()
+        val mimeType = getFontMimeType(file.name) ?: "font/ttf"
+        val base64 = android.util.Base64.encodeToString(bytes, android.util.Base64.NO_WRAP)
+        "data:$mimeType;base64,$base64"
+    } catch (e: Exception) {
+        Timber.e("[AMLLLyrics] [WebView] Failed to convert font to data URL: ${file.absolutePath}", e)
+        null
+    }
+}
+
+private fun getFontMimeType(fileName: String): String? {
+    return when {
+        fileName.endsWith(".ttf", ignoreCase = true) -> "font/ttf"
+        fileName.endsWith(".otf", ignoreCase = true) -> "font/otf"
+        fileName.endsWith(".woff", ignoreCase = true) -> "font/woff"
+        fileName.endsWith(".woff2", ignoreCase = true) -> "font/woff2"
+        else -> null
     }
 }
 

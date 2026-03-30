@@ -70,7 +70,7 @@ object AppSettings {
     private fun prefs(context: Context) =
         PreferenceHelper(context, PREFS_NAME)
 
-    private const val DEFAULT_AMLL_FONT_FAMILY = "\"SF Pro Display\", \"PingFang SC\", system-ui, -apple-system, \"Segoe UI\", sans-serif"
+    private const val DEFAULT_AMLL_FONT_FAMILY = "system-ui, \"Roboto\", \"Noto Sans SC\", sans-serif"
 
     data class AmllFontFile(
         val id: String,

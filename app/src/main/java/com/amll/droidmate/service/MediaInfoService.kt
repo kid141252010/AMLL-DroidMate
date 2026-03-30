@@ -20,6 +20,7 @@ import timber.log.Timber
 import java.io.File
 import java.io.FileOutputStream
 import java.util.concurrent.ConcurrentHashMap
+import kotlin.math.abs
 
 /**
  * 媒体信息监听服务 - 获取当前播放的歌曲信息
@@ -141,11 +142,26 @@ class MediaInfoService(private val context: Context) {
      * 判断是否需要更新 Flow
      */
     private fun shouldUpdate(old: NowPlayingMusic?, new: NowPlayingMusic): Boolean {
-        return old?.title != new.title ||
-               old?.artist != new.artist ||
-               old?.isPlaying != new.isPlaying ||
-               old?.albumArtUri != new.albumArtUri ||
-               old?.packageName != new.packageName
+        if (old == null) return true
+
+        if (old.title != new.title) return true
+        if (old.artist != new.artist) return true
+        if (old.isPlaying != new.isPlaying) return true
+        if (old.albumArtUri != new.albumArtUri) return true
+        if (old.packageName != new.packageName) return true
+        if (old.duration != new.duration) return true
+        if (old.album != new.album) return true
+
+        val positionDelta = abs(new.currentPosition - old.currentPosition)
+        val timestampChanged = new.timestamp != old.timestamp
+
+        // While playing, keep emitting position/time updates so lyric progress can follow playback.
+        if (new.isPlaying) {
+            return positionDelta > 0L || timestampChanged
+        }
+
+        // When paused, only emit significant jumps (for seek/scrub) to avoid noisy updates.
+        return positionDelta >= 1000L
     }
     
     /**

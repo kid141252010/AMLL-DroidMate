@@ -125,6 +125,13 @@ function logToAndroid(message: string, level: string = 'debug') {
   }
 }
 
+function getMonotonicTime(): number {
+  if (typeof performance !== 'undefined' && typeof performance.now === 'function') {
+    return performance.now()
+  }
+  return Date.now()
+}
+
 function normalizeLyricLines(lines: any[]): LyricLine[] {
   if (!Array.isArray(lines)) return []
   
@@ -158,6 +165,10 @@ function normalizeLyricLines(lines: any[]): LyricLine[] {
 function App() {
   const playerRef = useRef<LyricPlayerRef>(null)
   const currentTimeRef = useRef(0)
+  const authorityTimeRef = useRef(0)
+  const authorityAtRef = useRef(0)
+  const isPlayingRef = useRef(false)
+  const timeRafRef = useRef<number | null>(null)
   const [lyricLines, setLyricLines] = useAtom(musicLyricLinesAtom)
   const [currentTime, setCurrentTime] = useAtom(musicPlayingPositionAtom)
   const [albumUri, setAlbumUri] = useAtom(musicCoverAtom)
@@ -180,6 +191,8 @@ function App() {
       try {
         const rawLines = Array.isArray(payload?.lines) ? payload.lines : []
         const normalizedLines = normalizeLyricLines(rawLines)
+        authorityTimeRef.current = currentTimeRef.current
+        authorityAtRef.current = getMonotonicTime()
         
         logToAndroid(`updateLyrics called with ${rawLines.length} raw lines, ${normalizedLines.length} normalized`, 'debug')
         
@@ -230,6 +243,10 @@ function App() {
 
     window.updateTime = function (timeMs: number) {
       const parsedTime = Number(timeMs)
+      if (!Number.isFinite(parsedTime)) return
+
+      authorityTimeRef.current = parsedTime
+      authorityAtRef.current = getMonotonicTime()
       currentTimeRef.current = parsedTime
       setCurrentTime(parsedTime)
       // Keep the core player in sync immediately, not just through React state.
@@ -254,7 +271,11 @@ function App() {
     }
 
     window.setPaused = function (paused: boolean) {
-      setIsPlaying(!paused)
+      const nextPlaying = !paused
+      isPlayingRef.current = nextPlaying
+      authorityTimeRef.current = currentTimeRef.current
+      authorityAtRef.current = getMonotonicTime()
+      setIsPlaying(nextPlaying)
       logToAndroid(`Playback ${paused ? 'paused' : 'resumed'}`, 'debug')
     }
 
@@ -310,8 +331,41 @@ function App() {
   }, [setLyricLines, setCurrentTime, setAlbumUri, setIsPlaying, setLowFreqVolume])
 
   useEffect(() => {
+    authorityTimeRef.current = currentTime
+    authorityAtRef.current = getMonotonicTime()
     currentTimeRef.current = currentTime
   }, [currentTime])
+
+  useEffect(() => {
+    isPlayingRef.current = musicIsPlaying
+    authorityTimeRef.current = currentTimeRef.current
+    authorityAtRef.current = getMonotonicTime()
+  }, [musicIsPlaying])
+
+  useEffect(() => {
+    const tick = () => {
+      const now = getMonotonicTime()
+      const base = authorityTimeRef.current
+      const progressed = isPlayingRef.current ? base + (now - authorityAtRef.current) : base
+      currentTimeRef.current = progressed
+
+      if (playerRef.current?.lyricPlayer) {
+        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), false)
+      }
+
+      timeRafRef.current = requestAnimationFrame(tick)
+    }
+
+    authorityAtRef.current = getMonotonicTime()
+    timeRafRef.current = requestAnimationFrame(tick)
+
+    return () => {
+      if (timeRafRef.current !== null) {
+        cancelAnimationFrame(timeRafRef.current)
+        timeRafRef.current = null
+      }
+    }
+  }, [])
 
   // Sync playing state with Android
   useEffect(() => {
@@ -378,6 +432,7 @@ function App() {
           zIndex: 1,
           width: '100%',
           height: '100%',
+          fontFamily: 'var(--amll-lp-font-family, system-ui)',
           background: PLAYER_BACKGROUND,
         }}
       />
