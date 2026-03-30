@@ -2,6 +2,7 @@ package com.amll.droidmate.ui.viewmodel
 
 import android.app.Application
 import android.content.Context
+import android.os.SystemClock
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.amll.droidmate.data.converter.TTMLConverter
@@ -14,6 +15,7 @@ import com.amll.droidmate.domain.model.TTMLLyrics
 import com.amll.droidmate.service.LyricNotificationManager
 import com.amll.droidmate.service.MediaInfoService
 import com.amll.droidmate.ui.AppSettings
+import com.amll.droidmate.ui.screens.AMLLPlaybackSnapshot
 import com.amll.droidmate.util.AudioDeviceHelper
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -151,12 +153,57 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     internal fun getLyricTimeWithDeviceOffset(music: NowPlayingMusic?): Long {
         if (music == null) return 0L
         val base = music.currentPosition
+        val offset = resolveLyricOffset(music)
+        if (offset == 0L) return base
         val device = AudioDeviceHelper.getCurrentOutputDeviceName(context)
         val source = music.packageName ?: "*"
-        val offset = AppSettings.getLyricTimingOffset(context, music.title, music.artist, device, source) ?: 0L
-        if (offset == 0L) return base
         Timber.d("Applying lyric offset: ${'$'}offset ms (song='${'$'}{music.title}' artist='${'$'}{music.artist}' device='${'$'}device' source='${'$'}source')")
         return base + offset
+    }
+
+    internal fun getLyricPlaybackSnapshot(music: NowPlayingMusic?): AMLLPlaybackSnapshot {
+        if (music == null) {
+            return AMLLPlaybackSnapshot(
+                positionMs = 0L,
+                anchorElapsedMs = 0L,
+                speed = 0f,
+                isPlaying = false
+            )
+        }
+
+        val offset = resolveLyricOffset(music)
+        val fallbackPositionMs = (music.currentPosition + offset).coerceAtLeast(0L)
+        val hasAnchor = music.positionAnchorElapsedMs > 0L
+        val anchorPositionMs = if (hasAnchor) {
+            (music.positionAnchorMs + offset).coerceAtLeast(0L)
+        } else {
+            fallbackPositionMs
+        }
+
+        val speed = if (music.isPlaying) {
+            music.playbackSpeed.takeIf { it.isFinite() }?.coerceAtLeast(0f) ?: 1f
+        } else {
+            0f
+        }
+
+        val anchorElapsedMs = if (hasAnchor) {
+            music.positionAnchorElapsedMs
+        } else {
+            SystemClock.elapsedRealtime()
+        }
+
+        return AMLLPlaybackSnapshot(
+            positionMs = anchorPositionMs,
+            anchorElapsedMs = anchorElapsedMs,
+            speed = speed,
+            isPlaying = music.isPlaying
+        )
+    }
+
+    private fun resolveLyricOffset(music: NowPlayingMusic): Long {
+        val device = AudioDeviceHelper.getCurrentOutputDeviceName(context)
+        val source = music.packageName ?: "*"
+        return AppSettings.getLyricTimingOffset(context, music.title, music.artist, device, source) ?: 0L
     }
 
     /**

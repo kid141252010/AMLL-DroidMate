@@ -39,9 +39,9 @@ const LITE_PROFILE = {
 
 const DEFAULT_BG_PROFILE = {
   renderer: 'pixi',
-  fps: 60,
-  flowSpeed: 2.2,
-  renderScale: 0.8,
+  fps: 30,
+  flowSpeed: 2.0,
+  renderScale: 0.72,
   staticMode: false,
   lowFreqVolume: 1,
   hasLyric: true,
@@ -135,6 +135,13 @@ let currentProfile = { ...QUALITY_PROFILE }
 let currentBackgroundProfile = { ...DEFAULT_BG_PROFILE }
 let lastIncomingTime = null
 let seekUntilTs = 0
+let playbackClock = {
+  anchorPositionMs: 0,
+  anchorPerfNowMs: 0,
+  speed: 0,
+  isPlaying: false,
+  lastAnchorElapsedMs: 0,
+}
 
 // mirror important state on window so callbacks in the bundle can access them
 window.__amll = window.__amll || {}
@@ -147,6 +154,7 @@ Object.assign(window.__amll, {
   get currentProfile() { return currentProfile }, set currentProfile(v) { currentProfile = v },
   get currentBackgroundProfile() { return currentBackgroundProfile }, set currentBackgroundProfile(v) { currentBackgroundProfile = v },
   get state() { return state }, set state(v) { state = v },
+  get playbackClock() { return playbackClock }, set playbackClock(v) { playbackClock = v },
 })
 
 function amllGet(name){return window.__amll ? window.__amll[name] : undefined}
@@ -310,7 +318,11 @@ function applyBackgroundProfile(profile) {
   callBackground('setStaticMode', Boolean(currentBackgroundProfile.staticMode))
   callBackground('setLowFreqVolume', Number(currentBackgroundProfile.lowFreqVolume || 1))
   callBackground('setHasLyric', Boolean(currentBackgroundProfile.hasLyric))
-  callBackground('resume')
+  if (Boolean(currentBackgroundProfile.staticMode)) {
+    callBackground('pause')
+  } else {
+    callBackground('resume')
+  }
 }
 
 function rebuildBackgroundRender() {
@@ -584,6 +596,53 @@ function setFontSettings(fontFamily, activeFontFamilyNames = [], fontFiles = [])
   }
 }
 
+function getCurrentPlaybackTime(now = performance.now()) {
+  const clock = amllGet('playbackClock') || playbackClock
+  const base = Number(clock?.anchorPositionMs ?? 0)
+  if (!Number.isFinite(base)) return 0
+  if (!clock?.isPlaying || !Number.isFinite(clock?.speed) || clock.speed <= 0) {
+    return Math.max(0, base)
+  }
+  const elapsed = Math.max(0, now - Number(clock.anchorPerfNowMs ?? now))
+  return Math.max(0, base + elapsed * clock.speed)
+}
+
+window.syncPlayback = function (payload) {
+  try {
+    if (!payload || typeof payload !== 'object') return
+
+    const now = performance.now()
+    const parsedPosition = Number(payload.positionMs)
+    const parsedAnchorElapsedMs = Number(payload.anchorElapsedMs)
+    const parsedSpeed = Number(payload.speed)
+    const parsedPlaying = Boolean(payload.isPlaying)
+
+    const positionMs = Number.isFinite(parsedPosition) ? Math.max(0, parsedPosition) : 0
+    const anchorElapsedMs = Number.isFinite(parsedAnchorElapsedMs) ? Math.max(0, parsedAnchorElapsedMs) : 0
+    const speed = parsedPlaying && Number.isFinite(parsedSpeed) ? Math.max(0, parsedSpeed) : 0
+    const clock = amllGet('playbackClock') || playbackClock
+
+    if (anchorElapsedMs > 0 && anchorElapsedMs < Number(clock.lastAnchorElapsedMs || 0)) {
+      return
+    }
+
+    clock.anchorPositionMs = positionMs
+    clock.anchorPerfNowMs = now
+    clock.speed = speed
+    clock.isPlaying = parsedPlaying
+    clock.lastAnchorElapsedMs = anchorElapsedMs
+    playbackClock = clock
+    amllSet('playbackClock', clock)
+
+    const st = amllGet('state') || state
+    st.currentTime = positionMs
+    updateSeekingStateFromTime(now, positionMs)
+    setPaused(!parsedPlaying)
+  } catch (error) {
+    logToAndroid(`[AMLL-ERROR] syncPlayback error: ${error?.message || error}`)
+  }
+}
+
 function animationFrameLoop() {
   if (!player) return
 
@@ -594,17 +653,8 @@ function animationFrameLoop() {
 
     settleSeekingIfNeeded(now)
 
-    const currentTime = Math.trunc(state.currentTime)
-
-    // Playback pause/resume is controlled externally (e.g. by the host app).
-    // Kotlin can provide play state via Android.isPlaying(), so we sync here.
-    if (typeof Android !== 'undefined' && typeof Android.isPlaying === 'function') {
-      try {
-        setPaused(!Boolean(Android.isPlaying()))
-      } catch (_err) {
-        // ignore
-      }
-    }
+    const currentTime = Math.trunc(getCurrentPlaybackTime(now))
+    state.currentTime = currentTime
 
     callPlayer('setCurrentTime', currentTime, state.isSeeking)
     callPlayer('update', delta)
@@ -792,13 +842,15 @@ window.updateAlbumArt = async function (albumUri) {
 }
 
 window.updateTime = function (timeMs) {
-  const now = performance.now()
   const parsedTime = Number(timeMs)
-  const st = amllGet('state') || state
-  st.currentTime = Number.isFinite(parsedTime) ? parsedTime : 0
-  updateSeekingStateFromTime(now, st.currentTime)
-
-  // Animation is driven by requestAnimationFrame loop.
+  if (!Number.isFinite(parsedTime)) return
+  const clock = amllGet('playbackClock') || playbackClock
+  window.syncPlayback({
+    positionMs: parsedTime,
+    anchorElapsedMs: Number(clock?.lastAnchorElapsedMs ?? 0) + 1,
+    speed: Number(clock?.speed ?? 0),
+    isPlaying: Boolean(clock?.isPlaying),
+  })
 }
 
 window.configureLyricMotion = function (options) {

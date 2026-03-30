@@ -60,6 +60,12 @@ object AppSettings {
     private const val DEFAULT_AMLL_ANIMATION_WORD_FADE_WIDTH = 0.5f
     private const val DEFAULT_AMLL_ANIMATION_FPS = 60
 
+    @Volatile
+    private var cachedLyricTimingOffsetsRaw: String? = null
+
+    @Volatile
+    private var cachedLyricTimingOffsets: List<LyricTimingOffset> = emptyList()
+
     // helper to avoid repeating getSharedPreferences
     private fun prefs(context: Context) =
         PreferenceHelper(context, PREFS_NAME)
@@ -429,8 +435,9 @@ object AppSettings {
     fun getLyricTimingOffsets(context: Context): List<LyricTimingOffset> {
         val raw = prefs(context).getString(KEY_LYRIC_TIMING_OFFSETS, null)
         if (raw.isNullOrBlank()) return emptyList()
+        if (raw == cachedLyricTimingOffsetsRaw) return cachedLyricTimingOffsets
 
-        return try {
+        val parsed = try {
             val json = JSONArray(raw)
             buildList {
                 for (i in 0 until json.length()) {
@@ -446,6 +453,9 @@ object AppSettings {
         } catch (_: Exception) {
             emptyList()
         }
+        cachedLyricTimingOffsetsRaw = raw
+        cachedLyricTimingOffsets = parsed
+        return parsed
     }
 
     fun getLyricTimingOffset(
@@ -542,6 +552,9 @@ object AppSettings {
                 )
             }
         }
-        prefs(context).putString(KEY_LYRIC_TIMING_OFFSETS, json.toString())
+        val raw = json.toString()
+        prefs(context).putString(KEY_LYRIC_TIMING_OFFSETS, raw)
+        cachedLyricTimingOffsetsRaw = raw
+        cachedLyricTimingOffsets = entries.toList()
     }
 }

@@ -136,9 +136,7 @@ fun MainScreen() {
     val lyrics by viewModel.lyrics.collectAsState()
     val isLoading by viewModel.isLoading.collectAsState()
     val errorMessage by viewModel.errorMessage.collectAsState()
-    val currentTime = nowPlaying?.currentPosition ?: 0L
-    // Apply user-configured lyric timing offsets when updating the lyric view
-    val lyricTime = viewModel.getLyricTimeWithDeviceOffset(nowPlaying)
+    val lyricPlaybackSnapshot = viewModel.getLyricPlaybackSnapshot(nowPlaying)
     var notificationAccessGranted by remember { mutableStateOf(isNotificationAccessGranted(context)) }
 
     // update ripple color whenever album art changes or theme toggles
@@ -369,7 +367,7 @@ fun MainScreen() {
                         LyricsVisualLayer(
                             nowPlaying = nowPlaying,
                             lyrics = currentLyrics,
-                            currentTime = lyricTime,
+                            playbackSnapshot = lyricPlaybackSnapshot,
                             webViewReloadKey = webViewReloadKey,
                             onLineSeek = { viewModel.seekTo(it) },
                             // 改进：无歌词显示文案时禁止进入全屏
@@ -517,7 +515,7 @@ fun MainScreen() {
                     LyricsVisualLayer(
                         nowPlaying = nowPlaying,
                         lyrics = lyrics,
-                        currentTime = lyricTime,
+                        playbackSnapshot = lyricPlaybackSnapshot,
                         webViewReloadKey = webViewReloadKey,
                         onLineSeek = { viewModel.seekTo(it); resetHideTimer() },
                         amllDebugSource = "fullscreen",
@@ -601,7 +599,7 @@ fun MainScreen() {
 private fun LyricsVisualLayer(
     nowPlaying: NowPlayingMusic?,
     lyrics: TTMLLyrics?,
-    currentTime: Long,
+    playbackSnapshot: AMLLPlaybackSnapshot,
     webViewReloadKey: Int,
     onLineSeek: (Long) -> Unit,
     amllDebugSource: String,
@@ -613,20 +611,17 @@ private fun LyricsVisualLayer(
             AsyncImage(model = nowPlaying.albumArtUri, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize().blur(28.dp).alpha(0.55f))
         }
         Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(Color.Black.copy(0.28f), Color.Black.copy(0.55f), Color.Black.copy(0.68f)))))
-        // only create the WebView if we actually have lyrics; avoids unnecessary page loads
-        if (lyrics != null) {
-            key(webViewReloadKey) {
-                AMLLLyricsView(
-                    lyrics = lyrics,
-                    currentTime = currentTime,
-                    albumArtUri = nowPlaying?.albumArtUri,
-                    renderMode = AMLLRenderMode.DOM,
-                    debugSource = amllDebugSource,
-                    onLineSeek = onLineSeek,
-                    isPlaying = nowPlaying?.isPlaying ?: false,
-                    modifier = Modifier.fillMaxSize()
-                )
-            }
+        key(webViewReloadKey) {
+            AMLLLyricsView(
+                lyrics = lyrics,
+                playbackSnapshot = playbackSnapshot,
+                albumArtUri = nowPlaying?.albumArtUri,
+                renderMode = AMLLRenderMode.DOM,
+                debugSource = amllDebugSource,
+                onLineSeek = onLineSeek,
+                isPlaying = nowPlaying?.isPlaying ?: false,
+                modifier = Modifier.fillMaxSize()
+            )
         }
         if (onFullscreenTap != null) {
             Box(Modifier.fillMaxSize().clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) { onFullscreenTap() })

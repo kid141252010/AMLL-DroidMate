@@ -2,38 +2,63 @@ package com.amll.droidmate.ui.screens
 
 import android.annotation.SuppressLint
 import android.graphics.Color
+import android.view.View
+import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import android.view.View
-import android.view.ViewGroup
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.unit.dp
-import com.amll.droidmate.ui.AppSettings
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import com.amll.droidmate.domain.model.TTMLLyrics
+import com.amll.droidmate.ui.AppSettings
 import timber.log.Timber
 import java.io.File
 import java.util.concurrent.atomic.AtomicInteger
 
 /**
- * 对齐原AMLL项目的两种DOM渲染策略:
- * DOM: 使用AMLL Core的LyricPlayer
- * DOM_LITE: 使用轻量DOM渲染(阉割版)
+ * DOM: AMLL Core LyricPlayer.
+ * DOM_LITE: lower-cost DOM profile.
  */
 enum class AMLLRenderMode {
     DOM,
     DOM_LITE
 }
+
+data class AMLLPlaybackSnapshot(
+    val positionMs: Long,
+    val anchorElapsedMs: Long,
+    val speed: Float,
+    val isPlaying: Boolean
+)
+
+private data class AMLLBackgroundConfig(
+    val fps: Int,
+    val flowSpeed: Double,
+    val renderScale: Double,
+    val lowFreqVolume: Double
+)
+
+private data class AMLLBridgeConfig(
+    val modeValue: String,
+    val background: AMLLBackgroundConfig,
+    val motionConfig: String,
+    val fontSignature: String,
+    val fontScript: String
+)
 
 private const val AMLL_LOG_TAG = "AMLL"
 private val AMLL_VIEW_INSTANCE_COUNTER = AtomicInteger(0)
@@ -50,7 +75,7 @@ private fun amllInfo(message: String) {
 @Composable
 fun AMLLLyricsView(
     lyrics: TTMLLyrics?,
-    currentTime: Long,
+    playbackSnapshot: AMLLPlaybackSnapshot?,
     albumArtUri: String? = null,
     renderMode: AMLLRenderMode = AMLLRenderMode.DOM,
     debugSource: String = "unknown",
@@ -59,10 +84,30 @@ fun AMLLLyricsView(
     isPlaying: Boolean = true,
     modifier: Modifier = Modifier
 ) {
+    val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     val instanceId = remember { AMLL_VIEW_INSTANCE_COUNTER.incrementAndGet() }
     val onLyricsClickState = rememberUpdatedState(onLyricsClick)
     val onLineSeekState = rememberUpdatedState(onLineSeek)
     val isPlayingState = rememberUpdatedState(isPlaying)
+
+    var settingsRevision by remember { mutableIntStateOf(0) }
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                settingsRevision += 1
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    val bridgeConfig = remember(context, settingsRevision, renderMode, debugSource) {
+        loadBridgeConfig(context, renderMode, debugSource)
+    }
+
     var isPageReady by remember { mutableStateOf(false) }
     var lastModeValue by remember { mutableStateOf<String?>(null) }
     var lastBackgroundProfileValue by remember { mutableStateOf<String?>(null) }
@@ -71,15 +116,14 @@ fun AMLLLyricsView(
     var lastAlbumArtUri by remember { mutableStateOf<String?>(null) }
     var lastFontConfigSignature by remember { mutableStateOf<String?>(null) }
     var lastMotionConfigValue by remember { mutableStateOf<String?>(null) }
-    var lastBridgeTimeMs by remember { mutableStateOf<Long?>(null) }
+    var lastPlaybackPayload by remember { mutableStateOf<String?>(null) }
 
     AndroidView(
         modifier = modifier,
-        factory = { context ->
+        factory = { androidContext ->
             amllInfo("[$debugSource#$instanceId] Creating AMLL WebView, onLineSeek=${onLineSeekState.value != null}")
             WebView.setWebContentsDebuggingEnabled(true)
-            WebView(context).apply {
-                // 设置 WebView 的 LayoutParams 为 MATCH_PARENT
+            WebView(androidContext).apply {
                 layoutParams = ViewGroup.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.MATCH_PARENT
@@ -95,30 +139,26 @@ fun AMLLLyricsView(
                         lastAlbumArtUri = null
                         lastFontConfigSignature = null
                         lastMotionConfigValue = null
-                        lastBridgeTimeMs = null
+                        lastPlaybackPayload = null
                         amllDebug("[$debugSource#$instanceId] WebView page started: $url")
                     }
 
                     override fun onPageFinished(view: WebView, url: String) {
                         isPageReady = true
-                        // Force one re-sync after page finishes to avoid losing early bridge calls.
                         lastModeValue = null
                         lastBackgroundProfileValue = null
-                        // 页面刷新结束时不主动清空 lastLyrics，让我们知道是否还有有效歌词
-                        // lastLyrics = null
-                        // 页面刷新完成后如果我们之前有歌词 JSON 且当前仍然有 lyrics（不是因歌曲切换而清空），先立刻重新下发
-                        if (lastLyricsPayload != null && lastLyrics != null) {
-                            amllDebug("[$debugSource#$instanceId] reapplying lyrics payload after page finish")
-                            view.evaluateJavascript("window.updateLyrics && window.updateLyrics($lastLyricsPayload);", null)
-                        }
-                        // 不清空 payload，让 update() 继续根据 lyrics 对象决定重新生成
-                        // lastLyricsPayload = null
                         lastAlbumArtUri = null
                         lastFontConfigSignature = null
-                        // 确保页面加载后背景仍然透明
                         lastMotionConfigValue = null
-                        lastBridgeTimeMs = null
                         view.setBackgroundColor(Color.TRANSPARENT)
+
+                        if (lastLyricsPayload != null) {
+                            view.evaluateJavascript("window.updateLyrics && window.updateLyrics($lastLyricsPayload);", null)
+                        }
+                        if (lastPlaybackPayload != null) {
+                            view.evaluateJavascript("window.syncPlayback && window.syncPlayback($lastPlaybackPayload);", null)
+                        }
+
                         amllDebug("[$debugSource#$instanceId] WebView page finished: $url")
                         view.evaluateJavascript(
                             "window.logFromKotlin && window.logFromKotlin('[KOTLIN] page finished for $debugSource#$instanceId');",
@@ -126,6 +166,7 @@ fun AMLLLyricsView(
                         )
                     }
                 }
+
                 webChromeClient = object : WebChromeClient() {
                     override fun onConsoleMessage(consoleMessage: ConsoleMessage): Boolean {
                         amllDebug(
@@ -134,50 +175,34 @@ fun AMLLLyricsView(
                         return super.onConsoleMessage(consoleMessage)
                     }
                 }
+
                 @Suppress("DEPRECATION")
                 settings.apply {
                     javaScriptEnabled = true
                     domStorageEnabled = true
                     allowFileAccess = true
                     allowContentAccess = true
-                    // Allow asset page (file origin) to read local cached album art file URIs.
-                    // Required for `file:///data/user/0/...` album art paths passed from Kotlin.
                     allowFileAccessFromFileURLs = true
                     allowUniversalAccessFromFileURLs = true
-                    // 性能优化配置
                     cacheMode = android.webkit.WebSettings.LOAD_DEFAULT
                     setRenderPriority(android.webkit.WebSettings.RenderPriority.HIGH)
                 }
 
-                // 透明 WebView 配置，允许宿主 Compose 层的专辑图背景透出
-                // 先设置背景透明
                 setBackgroundColor(Color.TRANSPARENT)
-                // 使用 NONE 让 View 自行决定渲染方式，通常会使用硬件加速
-                // 同时避免软件渲染导致的帧率问题
                 setLayerType(View.LAYER_TYPE_NONE, null)
 
-                // keep a reference to the WebView so we can send immediate commands back to
-                // the javascript bridge when the user initiates a seek via clicking a lyric.
                 val webViewRef = this
-
                 addJavascriptInterface(
                     AMLLInterface(
-                        debugSource,
-                        instanceId,
-                        onLineSeekState.value,
+                        debugSource = debugSource,
+                        instanceId = instanceId,
+                        onLineSeek = onLineSeekState.value,
                         onSeekRequested = { seekTime ->
-                            // schedule a UI-thread action so that the webview can immediately
-                            // acknowledge the seek and prevent the "lyrics running around" effect.
                             webViewRef.post {
-                                // tell the JS player we are seeking so it can suspend auto-scroll
                                 webViewRef.evaluateJavascript(
                                     "window.callPlayer && window.callPlayer('setIsSeeking', true);",
                                     null
                                 )
-
-                                // update the webview time to the target position right away. this
-                                // reduces the window where the old time would cause the view to
-                                // scroll back to the previous line before the new position arrives
                                 webViewRef.evaluateJavascript(
                                     "window.updateTime && window.updateTime($seekTime);",
                                     null
@@ -196,11 +221,6 @@ fun AMLLLyricsView(
                 }
 
                 loadUrl("file:///android_asset/amll/index.html")
-
-                post {
-                    amllDebug("[$debugSource#$instanceId] WebView size after layout: width=$width, height=$height, measuredWidth=$measuredWidth, measuredHeight=$measuredHeight")
-                }
-
                 amllDebug("[$debugSource#$instanceId] WebView initialized with URL: file:///android_asset/amll/index.html")
             }
         },
@@ -210,30 +230,24 @@ fun AMLLLyricsView(
                 return@AndroidView
             }
 
-            amllDebug("[$debugSource#$instanceId] Update callback - WebView actual size: width=${view.width}, height=${view.height}, measuredWidth=${view.measuredWidth}, measuredHeight=${view.measuredHeight}")
-
-            // 立即更新时间，减少歌词行激活延迟
-            if (lastBridgeTimeMs != currentTime) {
-                Timber.d("[$debugSource#$instanceId] Bridge call: updateTime($currentTime)")
-                view.evaluateJavascript("window.updateTime && window.updateTime($currentTime);", null)
-                lastBridgeTimeMs = currentTime
+            val playbackPayload = buildPlaybackSyncPayload(playbackSnapshot, isPlaying)
+            if (lastPlaybackPayload != playbackPayload) {
+                view.evaluateJavascript("window.syncPlayback && window.syncPlayback($playbackPayload);", null)
+                lastPlaybackPayload = playbackPayload
             }
 
-            val modeValue = if (renderMode == AMLLRenderMode.DOM) "dom" else "dom-lite"
-            if (lastModeValue != modeValue) {
-                amllDebug("[$debugSource#$instanceId] Bridge call: setRenderMode($modeValue)")
-                view.evaluateJavascript("window.setRenderMode && window.setRenderMode('$modeValue');", null)
-                lastModeValue = modeValue
+            if (lastModeValue != bridgeConfig.modeValue) {
+                amllDebug("[$debugSource#$instanceId] Bridge call: setRenderMode(${bridgeConfig.modeValue})")
+                view.evaluateJavascript("window.setRenderMode && window.setRenderMode('${bridgeConfig.modeValue}');", null)
+                lastModeValue = bridgeConfig.modeValue
             }
 
-            val configuredFps = AppSettings.getAmllAnimationFps(view.context).coerceIn(15, 60)
-            val fpsValue = if (renderMode == AMLLRenderMode.DOM_LITE) configuredFps.coerceAtMost(45) else configuredFps
-
-            val backgroundProfile = if (renderMode == AMLLRenderMode.DOM) {
-                """{"renderer":"pixi","fps":$fpsValue,"flowSpeed":2.35,"renderScale":0.9,"staticMode":false,"lowFreqVolume":1.0}"""
-            } else {
-                """{"renderer":"pixi","fps":$fpsValue,"flowSpeed":1.4,"renderScale":0.65,"staticMode":false,"lowFreqVolume":1.0}"""
-            }
+            val hasLyric = !lyrics?.lines.isNullOrEmpty()
+            val backgroundProfile = buildBackgroundProfileJson(
+                background = bridgeConfig.background,
+                hasLyric = hasLyric,
+                isPlaying = isPlaying
+            )
             if (lastBackgroundProfileValue != backgroundProfile) {
                 amllDebug("[$debugSource#$instanceId] Bridge call: configureBackgroundEffect(profile=$backgroundProfile)")
                 view.evaluateJavascript(
@@ -243,100 +257,162 @@ fun AMLLLyricsView(
                 lastBackgroundProfileValue = backgroundProfile
             }
 
-            val motionConfig = """{
-                "enableSpring":${AppSettings.isAmllAnimationSpringEnabled(view.context)},
-                "enableScale":${AppSettings.isAmllAnimationScaleEnabled(view.context)},
-                "enableBlur":${AppSettings.isAmllAnimationBlurEnabled(view.context)},
-                "hidePassedLines":${AppSettings.isAmllAnimationHidePassedLinesEnabled(view.context)},
-                "wordFadeWidth":${AppSettings.getAmllAnimationWordFadeWidth(view.context)}
-            }""".trimIndent().replace("\n", "")
-
-            if (lastMotionConfigValue != motionConfig) {
-                amllDebug("[$debugSource#$instanceId] Bridge call: configureLyricMotion(profile=$motionConfig)")
-                view.evaluateJavascript("window.configureLyricMotion && window.configureLyricMotion($motionConfig);", null)
-                lastMotionConfigValue = motionConfig
+            if (lastMotionConfigValue != bridgeConfig.motionConfig) {
+                amllDebug("[$debugSource#$instanceId] Bridge call: configureLyricMotion(profile=${bridgeConfig.motionConfig})")
+                view.evaluateJavascript("window.configureLyricMotion && window.configureLyricMotion(${bridgeConfig.motionConfig});", null)
+                lastMotionConfigValue = bridgeConfig.motionConfig
             }
 
-            // 只在lyrics对象引用改变时才重新构建JSON（避免每秒都构建）
             if (lyrics !== lastLyrics) {
-                if (lyrics != null) {
-                    val lyricsJson = buildLyricsJson(lyrics)
-                    amllDebug("[$debugSource#$instanceId] Bridge call: updateLyrics(lines=${lyrics.lines.size})")
-                    view.evaluateJavascript("window.updateLyrics && window.updateLyrics($lyricsJson);", null)
-                    lastLyricsPayload = lyricsJson
+                val nextPayload = if (lyrics != null) {
+                    buildLyricsJson(lyrics)
                 } else {
-                    lastLyricsPayload = null
+                    emptyLyricsPayload()
                 }
+                amllDebug(
+                    "[$debugSource#$instanceId] Bridge call: updateLyrics(lines=${lyrics?.lines?.size ?: 0})"
+                )
+                view.evaluateJavascript("window.updateLyrics && window.updateLyrics($nextPayload);", null)
+                lastLyricsPayload = nextPayload
                 lastLyrics = lyrics
             }
 
             if (lastAlbumArtUri != albumArtUri) {
                 val escapedAlbumUri = escapeJsString(albumArtUri ?: "")
-                amllDebug("[$debugSource#$instanceId] Bridge call: updateAlbumArt(uri=${if (albumArtUri.isNullOrBlank()) "empty" else "present"})")
+                amllDebug(
+                    "[$debugSource#$instanceId] Bridge call: updateAlbumArt(uri=${if (albumArtUri.isNullOrBlank()) "empty" else "present"})"
+                )
                 view.evaluateJavascript("window.updateAlbumArt && window.updateAlbumArt(\"$escapedAlbumUri\");", null)
                 lastAlbumArtUri = albumArtUri
             }
 
-            val configuredFontFamily = AppSettings.getAmllFontFamily(view.context)
-            val fontFiles = AppSettings.getAmllFontFiles(view.context)
-                .filter { it.absolutePath.isNotBlank() }
-                .mapNotNull { item ->
-                    val file = File(item.absolutePath)
-                    if (!file.exists()) return@mapNotNull null
-                    FontWebEntry(
-                        id = item.id,
-                        sortKey = item.fontFamilyName,
-                        familyName = buildRuntimeFontFamilyName(item.fontFamilyName, item.id),
-                        uri = file.toURI().toString()
-                    )
-                }
-
-            val enabledIds = AppSettings.getEnabledAmllFontFileIds(view.context)
-            val preferredOrder = parsePreferredFontOrder(configuredFontFamily)
-            val enabledFamilies = fontFiles
-                .filter { enabledIds.contains(it.id) }
-                .sortedWith(
-                    compareBy<FontWebEntry> { fontSortPriority(it.sortKey, preferredOrder) }
-                        .thenBy { it.sortKey.lowercase() }
-                        .thenBy { it.id }
-                )
-                .map { it.familyName }
-                .distinct()
-
-            val effectiveFamily = if (enabledFamilies.isNotEmpty()) {
-                val enabledStack = enabledFamilies.joinToString(", ") { "\"$it\"" }
-                "$enabledStack, $configuredFontFamily"
-            } else {
-                configuredFontFamily
-            }
-
-            val fontSignature = buildString {
-                append(effectiveFamily)
-                append("|")
-                append(fontFiles.joinToString(";") { "${it.id}:${it.familyName}:${it.uri}" })
-                append("|")
-                append(enabledFamilies.joinToString(","))
-            }
-
-            if (lastFontConfigSignature != fontSignature) {
-                val script = buildApplyFontScript(effectiveFamily, fontFiles)
-                amllDebug(
-                    "[$debugSource#$instanceId] Bridge call: applyFontSettings(enabled=${enabledFamilies.size}, files=${fontFiles.size})"
-                )
-                view.evaluateJavascript(script, null)
-                lastFontConfigSignature = fontSignature
+            if (lastFontConfigSignature != bridgeConfig.fontSignature) {
+                amllDebug("[$debugSource#$instanceId] Bridge call: applyFontSettings(signature=${bridgeConfig.fontSignature})")
+                view.evaluateJavascript(bridgeConfig.fontScript, null)
+                lastFontConfigSignature = bridgeConfig.fontSignature
             }
         },
         onRelease = { view ->
-            // 当组件被销毁时，销毁 WebView 以避免内存泄漏
-            amllInfo("[$debugSource] Destroying AMLL WebView")
+            amllInfo("[$debugSource#$instanceId] Destroying AMLL WebView")
             view.stopLoading()
             view.clearHistory()
-            view.clearCache(true)
             view.removeJavascriptInterface("Android")
             view.destroy()
         }
     )
+}
+
+private fun loadBridgeConfig(
+    context: android.content.Context,
+    renderMode: AMLLRenderMode,
+    debugSource: String
+): AMLLBridgeConfig {
+    val modeValue = if (renderMode == AMLLRenderMode.DOM) "dom" else "dom-lite"
+    val configuredFps = AppSettings.getAmllAnimationFps(context).coerceIn(15, 60)
+    val fpsCap = if (debugSource.contains("fullscreen", ignoreCase = true)) 45 else 30
+    val fpsValue = configuredFps.coerceAtMost(fpsCap)
+
+    val background = if (renderMode == AMLLRenderMode.DOM_LITE) {
+        AMLLBackgroundConfig(
+            fps = fpsValue,
+            flowSpeed = 1.3,
+            renderScale = if (fpsCap <= 30) 0.62 else 0.68,
+            lowFreqVolume = 0.9
+        )
+    } else {
+        AMLLBackgroundConfig(
+            fps = fpsValue,
+            flowSpeed = 2.0,
+            renderScale = if (fpsCap <= 30) 0.72 else 0.82,
+            lowFreqVolume = 1.0
+        )
+    }
+
+    val motionConfig = """{
+        "enableSpring":${AppSettings.isAmllAnimationSpringEnabled(context)},
+        "enableScale":${AppSettings.isAmllAnimationScaleEnabled(context)},
+        "enableBlur":${AppSettings.isAmllAnimationBlurEnabled(context)},
+        "hidePassedLines":${AppSettings.isAmllAnimationHidePassedLinesEnabled(context)},
+        "wordFadeWidth":${AppSettings.getAmllAnimationWordFadeWidth(context)}
+    }""".trimIndent().replace("\n", "")
+
+    val configuredFontFamily = AppSettings.getAmllFontFamily(context)
+    val fontFiles = AppSettings.getAmllFontFiles(context)
+        .filter { it.absolutePath.isNotBlank() }
+        .mapNotNull { item ->
+            val file = File(item.absolutePath)
+            if (!file.exists()) return@mapNotNull null
+            FontWebEntry(
+                id = item.id,
+                sortKey = item.fontFamilyName,
+                familyName = buildRuntimeFontFamilyName(item.fontFamilyName, item.id),
+                uri = file.toURI().toString()
+            )
+        }
+
+    val enabledIds = AppSettings.getEnabledAmllFontFileIds(context)
+    val preferredOrder = parsePreferredFontOrder(configuredFontFamily)
+    val enabledFamilies = fontFiles
+        .filter { enabledIds.contains(it.id) }
+        .sortedWith(
+            compareBy<FontWebEntry> { fontSortPriority(it.sortKey, preferredOrder) }
+                .thenBy { it.sortKey.lowercase() }
+                .thenBy { it.id }
+        )
+        .map { it.familyName }
+        .distinct()
+
+    val effectiveFamily = if (enabledFamilies.isNotEmpty()) {
+        val enabledStack = enabledFamilies.joinToString(", ") { "\"$it\"" }
+        "$enabledStack, $configuredFontFamily"
+    } else {
+        configuredFontFamily
+    }
+
+    val fontSignature = buildString {
+        append(effectiveFamily)
+        append("|")
+        append(fontFiles.joinToString(";") { "${it.id}:${it.familyName}:${it.uri}" })
+        append("|")
+        append(enabledFamilies.joinToString(","))
+    }
+
+    return AMLLBridgeConfig(
+        modeValue = modeValue,
+        background = background,
+        motionConfig = motionConfig,
+        fontSignature = fontSignature,
+        fontScript = buildApplyFontScript(effectiveFamily, fontFiles)
+    )
+}
+
+private fun buildBackgroundProfileJson(
+    background: AMLLBackgroundConfig,
+    hasLyric: Boolean,
+    isPlaying: Boolean
+): String {
+    val staticMode = !hasLyric || !isPlaying
+    return """{"renderer":"pixi","fps":${background.fps},"flowSpeed":${background.flowSpeed},"renderScale":${background.renderScale},"staticMode":$staticMode,"lowFreqVolume":${background.lowFreqVolume},"hasLyric":$hasLyric}"""
+}
+
+private fun buildPlaybackSyncPayload(
+    playbackSnapshot: AMLLPlaybackSnapshot?,
+    isPlayingFallback: Boolean
+): String {
+    val isPlaying = playbackSnapshot?.isPlaying ?: isPlayingFallback
+    val speed = if (isPlaying) {
+        playbackSnapshot?.speed?.takeIf { it.isFinite() } ?: 1f
+    } else {
+        0f
+    }
+    val clampedSpeed = speed.coerceAtLeast(0f)
+    val positionMs = (playbackSnapshot?.positionMs ?: 0L).coerceAtLeast(0L)
+    val anchorElapsedMs = (playbackSnapshot?.anchorElapsedMs ?: 0L).coerceAtLeast(0L)
+    return """{"positionMs":$positionMs,"anchorElapsedMs":$anchorElapsedMs,"speed":$clampedSpeed,"isPlaying":$isPlaying}"""
+}
+
+private fun emptyLyricsPayload(): String {
+    return """{"metadata":{"title":"","artist":""},"lines":[]}"""
 }
 
 private data class FontWebEntry(
@@ -435,29 +511,24 @@ private fun buildLyricsJson(lyrics: TTMLLyrics): String {
         val text = line.text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
         val translation = line.translation?.replace("\\", "\\\\")?.replace("\"", "\\\"") ?: ""
         val transliteration = line.transliteration?.replace("\\", "\\\\")?.replace("\"", "\\\"") ?: ""
-        
-        // 构建 words 数组
+
         val wordsJson = if (line.words.isNotEmpty()) {
             line.words.joinToString(",") { word ->
                 val wordText = word.word.replace("\\", "\\\\").replace("\"", "\\\"")
                 """{"word":"$wordText","startTime":${word.startTime},"endTime":${word.endTime}}"""
             }
         } else {
-            // 如果没有逐词信息，则使用整行文本作为单词
             val wordText = line.text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
             """{"word":"$wordText","startTime":${line.startTime},"endTime":${line.endTime}}"""
         }
-        
-        // 调试日志
+
         if (line.words.isNotEmpty()) {
             amllDebug("Building JSON for line: '${line.text}' with ${line.words.size} words")
         }
-        
-        // 调试背景歌词的数据传递
         if (line.isBG) {
             amllDebug("[BG-LYRICS-DEBUG] JSON for BG line: text='$text' translation='$translation' roman='$transliteration' isBG=${line.isBG}")
         }
-        
+
         """{
             "startTime":${line.startTime},
             "endTime":${line.endTime},
