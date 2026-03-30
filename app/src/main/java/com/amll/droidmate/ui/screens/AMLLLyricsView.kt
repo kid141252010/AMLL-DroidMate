@@ -71,6 +71,7 @@ fun AMLLLyricsView(
     var lastAlbumArtUri by remember { mutableStateOf<String?>(null) }
     var lastFontConfigSignature by remember { mutableStateOf<String?>(null) }
     var lastMotionConfigValue by remember { mutableStateOf<String?>(null) }
+    var lastBridgeTimeMs by remember { mutableStateOf<Long?>(null) }
 
     AndroidView(
         modifier = modifier,
@@ -93,6 +94,8 @@ fun AMLLLyricsView(
                         lastLyricsPayload = null
                         lastAlbumArtUri = null
                         lastFontConfigSignature = null
+                        lastMotionConfigValue = null
+                        lastBridgeTimeMs = null
                         amllDebug("[$debugSource#$instanceId] WebView page started: $url")
                     }
 
@@ -113,6 +116,8 @@ fun AMLLLyricsView(
                         lastAlbumArtUri = null
                         lastFontConfigSignature = null
                         // 确保页面加载后背景仍然透明
+                        lastMotionConfigValue = null
+                        lastBridgeTimeMs = null
                         view.setBackgroundColor(Color.TRANSPARENT)
                         amllDebug("[$debugSource#$instanceId] WebView page finished: $url")
                         view.evaluateJavascript(
@@ -208,8 +213,11 @@ fun AMLLLyricsView(
             amllDebug("[$debugSource#$instanceId] Update callback - WebView actual size: width=${view.width}, height=${view.height}, measuredWidth=${view.measuredWidth}, measuredHeight=${view.measuredHeight}")
 
             // 立即更新时间，减少歌词行激活延迟
-            Timber.d("[$debugSource#$instanceId] Bridge call: updateTime($currentTime)")
-            view.evaluateJavascript("window.updateTime && window.updateTime($currentTime);", null)
+            if (lastBridgeTimeMs != currentTime) {
+                Timber.d("[$debugSource#$instanceId] Bridge call: updateTime($currentTime)")
+                view.evaluateJavascript("window.updateTime && window.updateTime($currentTime);", null)
+                lastBridgeTimeMs = currentTime
+            }
 
             val modeValue = if (renderMode == AMLLRenderMode.DOM) "dom" else "dom-lite"
             if (lastModeValue != modeValue) {

@@ -9,10 +9,10 @@ const DEFAULT_FONT_STACK = '"SF Pro Display", "PingFang SC", system-ui, -apple-s
 const DYNAMIC_FONT_STYLE_ID = 'amll-dynamic-font-face-style'
 
 const QUALITY_PROFILE = {
-  alignAnchor: 'center',
+  alignAnchor: 'top',
   // Align based on the active line's vertical center.
   // Target the “upper golden-ratio” point (≈38.2%) of the visible area.
-  alignPosition: 0.382,
+  alignPosition: 0.1,
   enableSpring: true,
   enableScale: true,
   enableBlur: true,
@@ -358,6 +358,8 @@ function callPlayer(methodName, ...args) {
   pl[methodName](...args)
 }
 
+window.callPlayer = callPlayer
+
 function applyMotionProfile(profile) {
   currentProfile = { ...profile }
   if (window.__amll) window.__amll.currentProfile = currentProfile
@@ -522,10 +524,7 @@ function settleSeekingIfNeeded(now) {
 
 function applyPlayerStyle(element) {
   element.style.width = '100%'
-  // let the container size itself vertically instead of forcing 100%
-  // height; the overridden calcLayout function will update the height
-  // to the total lyric length so that the page can scroll naturally.
-  element.style.height = 'auto'
+  element.style.height = '100%'
   element.style.background = PLAYER_BACKGROUND
   // avoid blend mode which may cancel out lyrics against album art
   element.style.mixBlendMode = 'normal'
@@ -632,11 +631,6 @@ function mountPlayer() {
     return
   }
 
-  // make sure the document is allowed to scroll vertically; some
-  // embed hosts might set overflow hidden by default
-  document.documentElement.style.overflowY = 'auto'
-  document.body.style.overflowY = 'auto'
-
   app.innerHTML = ''
   app.style.background = PLAYER_BACKGROUND
 
@@ -652,137 +646,6 @@ function mountPlayer() {
 
     player = new LyricPlayer()
 
-    // ensure every lyric line is buffered so scrolling can reach the very
-    // start/end regardless of playback position. the core library normally
-    // only keeps a few "hot" lines in memory, which caused the behaviour
-    // where only the nearby lines were rendered.
-    const originalSetLyricLines = player.setLyricLines.bind(player)
-    player.setLyricLines = function (lines, time = 0) {
-      originalSetLyricLines(lines, time)
-
-      if (this.bufferedLines) {
-        this.bufferedLines.clear()
-        for (let i = 0; i < lines.length; i++) {
-          this.bufferedLines.add(i)
-        }
-        // keep scroll index at start so user can immediately scroll upward
-        // and still reach the first line.
-        this.scrollToIndex = 0
-        this.calcLayout(true)
-      }
-    }
-
-    // ——— web-flow 布局调整 begin ———
-    // 允许自由滚动（与 v3.1.1 行为一致），同时禁用内部的滚动边界约束
-    player.allowScroll = true
-    player.limitScrollOffset = function () {}
-
-    // 保存原始函数以备需要恢复
-    const originalCalcLayout = player.calcLayout.bind(player)
-
-    // avoid accumulating padding and scrolling offsets every frame by
-    // remembering the last value we applied.
-    // track the previous padding so we can subtract it when re‑measuring
-    // content height; this avoids accumulating padding in the element height.
-    let __lastPadding = 0
-
-    // Ensure active (hot) lines stay in view even when there are multiple.
-    // The core player aligns a single line based on the golden ratio position,
-    // which can push additional active lines out of view when there are >3.
-    // We keep the golden-ratio behavior where possible, but adjust when the
-    // active group would overflow the viewport.
-    let __didAdjustActiveLines = false
-
-    player.calcLayout = async function (animated = false) {
-      await originalCalcLayout(animated)
-
-      if (!__didAdjustActiveLines) {
-        __didAdjustActiveLines = true
-        try {
-          const viewHeight = this.size[1] || (this.element?.clientHeight || 0)
-          if (viewHeight > 0 && this.hotLines && this.hotLines.size > 0) {
-            const activeSet = new Set(this.hotLines)
-
-            // Ensure nearby background lines are included too (they often show alongside the
-            // current lyric line but may not always be part of hotLines during update). This
-            // keeps active background lyrics in view.
-            Array.from(this.hotLines).forEach((idx) => {
-              const next = this.currentLyricLineObjects[idx + 1]
-              if (next?.getLine?.()?.isBG) activeSet.add(idx + 1)
-              const prev = this.currentLyricLineObjects[idx - 1]
-              if (prev?.getLine?.()?.isBG) activeSet.add(idx - 1)
-            })
-
-            const activeIndices = Array.from(activeSet).sort((a, b) => a - b)
-
-            // If any active line is still animating (spring/physics), don't adjust yet.
-            // Waiting avoids the “位置异常” glitch when layout is mid‑transition.
-            const isAnyAnimating = activeIndices.some((idx) => {
-              const lineObj = this.currentLyricLineObjects[idx]
-              return lineObj?.lineTransforms?.posY?.arrived && !lineObj.lineTransforms.posY.arrived()
-            })
-            if (isAnyAnimating) {
-              // Keep golden-ratio alignment until movement finishes.
-            } else {
-              let minY = Infinity
-              let maxY = -Infinity
-
-              for (const idx of activeIndices) {
-                const lineObj = this.currentLyricLineObjects[idx]
-                if (!lineObj) continue
-                const y = lineObj.lineTransforms.posY.getCurrentPosition()
-                const rawHeight = this.lyricLinesSize.get(lineObj)?.[1] ?? 0
-                const scale = (lineObj.lineTransforms.scale?.getCurrentPosition?.() ?? 100) / 100
-                const h = rawHeight * Math.max(0, scale)
-                minY = Math.min(minY, y)
-                maxY = Math.max(maxY, y + (h || 0))
-              }
-
-              if (minY !== Infinity) {
-                // Allow a tiny tolerance so we don't nudge the layout for sub-pixel differences.
-                const tolerance = Math.max(2, viewHeight * 0.01)
-                let shift = 0
-                if (minY < -tolerance) shift = -minY
-                if (maxY > viewHeight + tolerance) shift = shift || (viewHeight - maxY)
-
-                // Avoid tiny two-way shifts that would break golden-ratio alignment.
-                if (Math.abs(shift) > 1) {
-                  this.scrollOffset -= shift
-                  if (typeof this.limitScrollOffset === 'function') {
-                    this.limitScrollOffset()
-                  }
-                  await originalCalcLayout(animated)
-                }
-              }
-            }
-          }
-        } catch (error) {
-          logToAndroid(`[AMLL-DEBUG] ensure active lines visible failed: ${error?.message || error}`)
-        }
-        __didAdjustActiveLines = false
-      }
-
-      // add half‑screen blank space at top/bottom
-      const pad = this.size[1] * 0.5
-      if (this.element) {
-        this.element.style.boxSizing = 'border-box'
-        this.element.style.paddingTop = pad + 'px'
-        this.element.style.paddingBottom = pad + 'px'
-
-        // after originalCalcLayout the element height reflects just the
-        // lyric content (including whatever padding we added previously), so
-        // subtract the old padding to recover the true base height.
-        const computedHeight = parseFloat(this.element.style.height) || this.element.clientHeight || 0
-        const baseHeight = Math.max(0, computedHeight - __lastPadding * 2)
-
-        this.element.style.height = baseHeight + pad * 2 + 'px'
-        this.bottomLine.setTransform(0, baseHeight + pad, false, 0)
-      }
-
-      __lastPadding = pad
-    }
-    // ——— web-flow 布局调整 end ———
-
     const playerElement = player.getElement()
     applyPlayerStyle(playerElement)
 
@@ -795,22 +658,9 @@ function mountPlayer() {
       playerElement.classList.remove('undefined')
     }
 
-    // ensure the container never collapses to zero height. "auto" works
-    // when there are lyric lines, but before any data arrives the element
-    // would have no content and the browser computes a zero height. dialing
-    // in a min-height avoids the empty‑state bug and mirrors #app's 100% rule.
-    playerElement.style.minHeight = '100vh'
-
-    // if we disabled the internal scrolling the element must remain in the
-    // normal document flow so its height can drive page scrolling; otherwise
-    // absolute positioning would collapse its parent height to zero.
-    if (player.allowScroll) {
-      playerElement.style.position = 'absolute'
-      playerElement.style.inset = '0'
-    } else {
-      playerElement.style.position = 'relative'
-      playerElement.style.inset = 'auto'
-    }
+    playerElement.style.minHeight = '100%'
+    playerElement.style.position = 'relative'
+    playerElement.style.inset = 'auto'
     playerElement.style.zIndex = '1'
     app.appendChild(playerElement)
 
@@ -909,14 +759,6 @@ window.updateLyrics = function (lyricsPayload) {
     }
     logToAndroid(`[AMLL-DEBUG] lyricsPayload lines count=${rawLines.length}`)
 
-    // fallback when no lines at all
-    if (state.lyricLines.length === 0) {
-      logToAndroid('[AMLL-DEV] injecting placeholder lyric because none provided')
-      state.lyricLines = [
-        { words: [{word:'Demo',startTime:0,endTime:2000}],translatedLyric:'',romanLyric:'',startTime:0,endTime:2000,isBG:false,isDuet:false }
-      ]
-    }
-
     if (player) {
       const currentTimeToUse = Math.trunc(state.currentTime)
       logToAndroid(`[AMLL-INFO] Updating lyrics with currentTime=${currentTimeToUse}ms`)
@@ -955,13 +797,8 @@ window.updateTime = function (timeMs) {
   const st = amllGet('state') || state
   st.currentTime = Number.isFinite(parsedTime) ? parsedTime : 0
   updateSeekingStateFromTime(now, st.currentTime)
-  
-  // 立即更新播放器状态，减少歌词行激活延迟
-  if (player) {
-    const currentTime = Math.trunc(st.currentTime)
-    callPlayer('setCurrentTime', currentTime, state.isSeeking)
-    callPlayer('update', 0)
-  }
+
+  // Animation is driven by requestAnimationFrame loop.
 }
 
 window.configureLyricMotion = function (options) {
