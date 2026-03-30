@@ -11,8 +11,8 @@ const DYNAMIC_FONT_STYLE_ID = 'amll-dynamic-font-face-style'
 const QUALITY_PROFILE = {
   alignAnchor: 'top',
   // Align based on the active line's vertical center.
-  // Target the “upper golden-ratio” point (≈38.2%) of the visible area.
-  alignPosition: 0.1,
+  // Target the “upper golden-ratio” point (≈32%) of the visible area.
+  alignPosition: 0.32,
   enableSpring: true,
   enableScale: true,
   enableBlur: true,
