@@ -1,0 +1,13 @@
+error: failed to get `amll-lyric` as a dependency of package `qq_qrc_decoder v0.1.0 (E:\AMLL-DroidMate\qq_qrc_decoder)`
+
+Caused by:
+  failed to load source for dependency `amll-lyric`
+
+Caused by:
+  Unable to update E:\AMLL\packages\lyric
+
+Caused by:
+  failed to read `E:\AMLL\packages\lyric\Cargo.toml`
+
+Caused by:
+  系统找不到指定的路径。 (os error 3)

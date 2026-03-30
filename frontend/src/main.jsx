@@ -1,5 +1,3 @@
-import React, { useState } from 'react'
-import ReactDOM from 'react-dom'
 import { LyricPlayer, BackgroundRender, PixiRenderer, MeshGradientRenderer } from '@applemusic-like-lyrics/core'
 import '@applemusic-like-lyrics/core/style.css'
 
@@ -317,14 +315,20 @@ function applyBackgroundProfile(profile) {
 
 function rebuildBackgroundRender() {
   const app = document.getElementById('app')
-  if (!app) return
+  if (!app) return false
 
   if (backgroundRender) {
     backgroundRender.dispose()
     backgroundRender = null
   }
 
-  backgroundRender = BackgroundRender.new(getBackgroundRendererCtor(currentBackgroundProfile.renderer))
+  try {
+    backgroundRender = BackgroundRender.new(getBackgroundRendererCtor(currentBackgroundProfile.renderer))
+  } catch (error) {
+    backgroundRender = null
+    logToAndroid(`[AMLL-WARN] Failed to rebuild background render: ${error?.message || error}`)
+    return false
+  }
   const bgElement = backgroundRender.getElement()
   // render should sit behind lyrics and stay locked to the viewport, not
   // scroll with the document
@@ -345,6 +349,7 @@ function rebuildBackgroundRender() {
   if (art) {
     callBackground('setAlbum', art)
   }
+  return true
 }
 
 function callPlayer(methodName, ...args) {
@@ -458,7 +463,9 @@ function handleTouchEnd(e) {
         logToAndroid(`[AMLL-TAP] Clicked element: ${element.tagName}, class=${element.className}`)
         
         // 尝试在其最近的歌词行容器上触发点击
-        let lyricLine = element.closest('._lyricLine_1vq69_6, ._lyricLine_1ygrf_6')
+        // lyric line class names are hashed by the library and can change
+        // between builds, so match by the stable prefix instead of hardcoding.
+        let lyricLine = element.closest('[class*="_lyricLine_"]')
         if (!lyricLine) {
           lyricLine = element.closest('[class*="lyric"]')
         }
@@ -1098,11 +1105,11 @@ window.addEventListener('DOMContentLoaded', () => {
   styleTag.textContent = `
     /* force the player to match viewport height and remove builtin vertical padding */
     .amll-lyric-player {
-      padding-top: 0 !important;
-      padding-bottom: 0 !important;
-      height: 100vh !important;
-      max-height: 100vh !important;
-      overflow: hidden !important;
+      padding-top: 0;
+      padding-bottom: 0;
+      height: 100vh;
+      max-height: 100vh;
+      overflow: hidden;
     }
 
     /* touch down: show background lyrics + dim the player, similar to pause */

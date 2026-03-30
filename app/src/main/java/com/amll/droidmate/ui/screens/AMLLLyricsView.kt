@@ -436,7 +436,7 @@ private fun buildLyricsJson(lyrics: TTMLLyrics): String {
             }
         } else {
             // 如果没有逐词信息，则使用整行文本作为单词
-            val wordText = text.replace("\"", "\\\"")
+            val wordText = line.text.replace("\\", "\\\\").replace("\"", "\\\"").replace("\n", "\\n")
             """{"word":"$wordText","startTime":${line.startTime},"endTime":${line.endTime}}"""
         }
         

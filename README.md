@@ -24,6 +24,14 @@
 - 应用全局颜色根据专辑图变换
 - 基于歌曲和输出设备的歌词偏移，轻松解决延迟问题
 
+## 技术栈
+
+- Android 客户端：Kotlin、Jetpack Compose、Material3、AndroidX（含 Media3 / Lifecycle / WebKit）
+- 前端歌词渲染：React + Vite，集成 [@applemusic-like-lyrics/core](https://www.npmjs.com/package/@applemusic-like-lyrics/core) 与 `@applemusic-like-lyrics/react`
+- 网络与数据层：Ktor、Kotlinx Serialization、Coroutines、Room、Timber
+- 多源歌词能力：AMLL TTML DB、QQ 音乐、网易云、酷狗（统一检索、解析与特性匹配）
+- 构建与工程：Gradle Kotlin DSL（Android）+ npm（frontend）
+
 ## 参考和接入的项目
 
 - 核心动效：[Apple Music-like Lyrics （AMLL） `amll-dev/applemusic-like-lyrics`](https://github.com/amll-dev/applemusic-like-lyrics)
