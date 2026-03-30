@@ -27101,27 +27101,12 @@ var AMLLBundle = (function() {
     if (hasRequiredUtils) return utils;
     hasRequiredUtils = 1;
     var formats2 = /* @__PURE__ */ requireFormats();
-    var getSideChannel = requireSideChannel();
     var has = Object.prototype.hasOwnProperty;
     var isArray = Array.isArray;
-    var overflowChannel = getSideChannel();
-    var markOverflow = function markOverflow2(obj, maxIndex) {
-      overflowChannel.set(obj, maxIndex);
-      return obj;
-    };
-    var isOverflow = function isOverflow2(obj) {
-      return overflowChannel.has(obj);
-    };
-    var getMaxIndex = function getMaxIndex2(obj) {
-      return overflowChannel.get(obj);
-    };
-    var setMaxIndex = function setMaxIndex2(obj, maxIndex) {
-      overflowChannel.set(obj, maxIndex);
-    };
     var hexTable = (function() {
       var array = [];
       for (var i2 = 0; i2 < 256; ++i2) {
-        array[array.length] = "%" + ((i2 < 16 ? "0" : "") + i2.toString(16)).toUpperCase();
+        array.push("%" + ((i2 < 16 ? "0" : "") + i2.toString(16)).toUpperCase());
       }
       return array;
     })();
@@ -27133,7 +27118,7 @@ var AMLLBundle = (function() {
           var compacted = [];
           for (var j2 = 0; j2 < obj.length; ++j2) {
             if (typeof obj[j2] !== "undefined") {
-              compacted[compacted.length] = obj[j2];
+              compacted.push(obj[j2]);
             }
           }
           item.obj[item.prop] = compacted;
@@ -27155,19 +27140,9 @@ var AMLLBundle = (function() {
       }
       if (typeof source !== "object" && typeof source !== "function") {
         if (isArray(target)) {
-          var nextIndex = target.length;
-          if (options && typeof options.arrayLimit === "number" && nextIndex > options.arrayLimit) {
-            return markOverflow(arrayToObject(target.concat(source), options), nextIndex);
-          }
-          target[nextIndex] = source;
+          target.push(source);
         } else if (target && typeof target === "object") {
-          if (isOverflow(target)) {
-            var newIndex = getMaxIndex(target) + 1;
-            target[newIndex] = source;
-            setMaxIndex(target, newIndex);
-          } else if (options && options.strictMerge) {
-            return [target, source];
-          } else if (options && (options.plainObjects || options.allowPrototypes) || !has.call(Object.prototype, source)) {
+          if (options && (options.plainObjects || options.allowPrototypes) || !has.call(Object.prototype, source)) {
             target[source] = true;
           }
         } else {
@@ -27176,20 +27151,7 @@ var AMLLBundle = (function() {
         return target;
       }
       if (!target || typeof target !== "object") {
-        if (isOverflow(source)) {
-          var sourceKeys = Object.keys(source);
-          var result = options && options.plainObjects ? { __proto__: null, 0: target } : { 0: target };
-          for (var m2 = 0; m2 < sourceKeys.length; m2++) {
-            var oldKey = parseInt(sourceKeys[m2], 10);
-            result[oldKey + 1] = source[sourceKeys[m2]];
-          }
-          return markOverflow(result, getMaxIndex(source) + 1);
-        }
-        var combined = [target].concat(source);
-        if (options && typeof options.arrayLimit === "number" && combined.length > options.arrayLimit) {
-          return markOverflow(arrayToObject(combined, options), combined.length - 1);
-        }
-        return combined;
+        return [target].concat(source);
       }
       var mergeTarget = target;
       if (isArray(target) && !isArray(source)) {
@@ -27202,7 +27164,7 @@ var AMLLBundle = (function() {
             if (targetItem && typeof targetItem === "object" && item && typeof item === "object") {
               target[i2] = merge2(targetItem, item, options);
             } else {
-              target[target.length] = item;
+              target.push(item);
             }
           } else {
             target[i2] = item;
@@ -27216,15 +27178,6 @@ var AMLLBundle = (function() {
           acc[key] = merge2(acc[key], value, options);
         } else {
           acc[key] = value;
-        }
-        if (isOverflow(source) && !isOverflow(acc)) {
-          markOverflow(acc, getMaxIndex(source));
-        }
-        if (isOverflow(acc)) {
-          var keyNum = parseInt(key, 10);
-          if (String(keyNum) === key && keyNum >= 0 && keyNum > getMaxIndex(acc)) {
-            setMaxIndex(acc, keyNum);
-          }
         }
         return acc;
       }, mergeTarget);
@@ -27303,8 +27256,8 @@ var AMLLBundle = (function() {
           var key = keys[j2];
           var val = obj[key];
           if (typeof val === "object" && val !== null && refs.indexOf(val) === -1) {
-            queue[queue.length] = { obj, prop: key };
-            refs[refs.length] = val;
+            queue.push({ obj, prop: key });
+            refs.push(val);
           }
         }
       }
@@ -27320,24 +27273,14 @@ var AMLLBundle = (function() {
       }
       return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
     };
-    var combine = function combine2(a2, b2, arrayLimit, plainObjects) {
-      if (isOverflow(a2)) {
-        var newIndex = getMaxIndex(a2) + 1;
-        a2[newIndex] = b2;
-        setMaxIndex(a2, newIndex);
-        return a2;
-      }
-      var result = [].concat(a2, b2);
-      if (result.length > arrayLimit) {
-        return markOverflow(arrayToObject(result, { plainObjects }), result.length - 1);
-      }
-      return result;
+    var combine = function combine2(a2, b2) {
+      return [].concat(a2, b2);
     };
     var maybeMap = function maybeMap2(val, fn2) {
       if (isArray(val)) {
         var mapped = [];
         for (var i2 = 0; i2 < val.length; i2 += 1) {
-          mapped[mapped.length] = fn2(val[i2]);
+          mapped.push(fn2(val[i2]));
         }
         return mapped;
       }
@@ -27351,9 +27294,7 @@ var AMLLBundle = (function() {
       decode,
       encode,
       isBuffer,
-      isOverflow,
       isRegExp,
-      markOverflow,
       maybeMap,
       merge
     };
@@ -27670,7 +27611,6 @@ var AMLLBundle = (function() {
       parseArrays: true,
       plainObjects: false,
       strictDepth: false,
-      strictMerge: true,
       strictNullHandling: false,
       throwOnLimitExceeded: false
     };
@@ -27732,18 +27672,16 @@ var AMLLBundle = (function() {
           val = options.strictNullHandling ? null : "";
         } else {
           key = options.decoder(part.slice(0, pos), defaults.decoder, charset, "key");
-          if (key !== null) {
-            val = utils2.maybeMap(
-              parseArrayValue(
-                part.slice(pos + 1),
-                options,
-                isArray(obj[key]) ? obj[key].length : 0
-              ),
-              function(encodedVal) {
-                return options.decoder(encodedVal, defaults.decoder, charset, "value");
-              }
-            );
-          }
+          val = utils2.maybeMap(
+            parseArrayValue(
+              part.slice(pos + 1),
+              options,
+              isArray(obj[key]) ? obj[key].length : 0
+            ),
+            function(encodedVal) {
+              return options.decoder(encodedVal, defaults.decoder, charset, "value");
+            }
+          );
         }
         if (val && options.interpretNumericEntities && charset === "iso-8859-1") {
           val = interpretNumericEntities(String(val));
@@ -27751,24 +27689,11 @@ var AMLLBundle = (function() {
         if (part.indexOf("[]=") > -1) {
           val = isArray(val) ? [val] : val;
         }
-        if (options.comma && isArray(val) && val.length > options.arrayLimit) {
-          if (options.throwOnLimitExceeded) {
-            throw new RangeError("Array limit exceeded. Only " + options.arrayLimit + " element" + (options.arrayLimit === 1 ? "" : "s") + " allowed in an array.");
-          }
-          val = utils2.combine([], val, options.arrayLimit, options.plainObjects);
-        }
-        if (key !== null) {
-          var existing = has.call(obj, key);
-          if (existing && (options.duplicates === "combine" || part.indexOf("[]=") > -1)) {
-            obj[key] = utils2.combine(
-              obj[key],
-              val,
-              options.arrayLimit,
-              options.plainObjects
-            );
-          } else if (!existing || options.duplicates === "last") {
-            obj[key] = val;
-          }
+        var existing = has.call(obj, key);
+        if (existing && options.duplicates === "combine") {
+          obj[key] = utils2.combine(obj[key], val);
+        } else if (!existing || options.duplicates === "last") {
+          obj[key] = val;
         }
       }
       return obj;
@@ -27784,32 +27709,17 @@ var AMLLBundle = (function() {
         var obj;
         var root = chain[i2];
         if (root === "[]" && options.parseArrays) {
-          if (utils2.isOverflow(leaf)) {
-            obj = leaf;
-          } else {
-            obj = options.allowEmptyArrays && (leaf === "" || options.strictNullHandling && leaf === null) ? [] : utils2.combine(
-              [],
-              leaf,
-              options.arrayLimit,
-              options.plainObjects
-            );
-          }
+          obj = options.allowEmptyArrays && (leaf === "" || options.strictNullHandling && leaf === null) ? [] : utils2.combine([], leaf);
         } else {
           obj = options.plainObjects ? { __proto__: null } : {};
           var cleanRoot = root.charAt(0) === "[" && root.charAt(root.length - 1) === "]" ? root.slice(1, -1) : root;
           var decodedRoot = options.decodeDotInKeys ? cleanRoot.replace(/%2E/g, ".") : cleanRoot;
           var index = parseInt(decodedRoot, 10);
-          var isValidArrayIndex = !isNaN(index) && root !== decodedRoot && String(index) === decodedRoot && index >= 0 && options.parseArrays;
           if (!options.parseArrays && decodedRoot === "") {
             obj = { 0: leaf };
-          } else if (isValidArrayIndex && index < options.arrayLimit) {
+          } else if (!isNaN(index) && root !== decodedRoot && String(index) === decodedRoot && index >= 0 && (options.parseArrays && index <= options.arrayLimit)) {
             obj = [];
             obj[index] = leaf;
-          } else if (isValidArrayIndex && options.throwOnLimitExceeded) {
-            throw new RangeError("Array limit exceeded. Only " + options.arrayLimit + " element" + (options.arrayLimit === 1 ? "" : "s") + " allowed in an array.");
-          } else if (isValidArrayIndex) {
-            obj[index] = leaf;
-            utils2.markOverflow(obj, index);
           } else if (decodedRoot !== "__proto__") {
             obj[decodedRoot] = leaf;
           }
@@ -27818,19 +27728,14 @@ var AMLLBundle = (function() {
       }
       return leaf;
     };
-    var splitKeyIntoSegments = function splitKeyIntoSegments2(givenKey, options) {
-      var key = options.allowDots ? givenKey.replace(/\.([^.[]+)/g, "[$1]") : givenKey;
-      if (options.depth <= 0) {
-        if (!options.plainObjects && has.call(Object.prototype, key)) {
-          if (!options.allowPrototypes) {
-            return;
-          }
-        }
-        return [key];
+    var parseKeys = function parseQueryStringKeys(givenKey, val, options, valuesParsed) {
+      if (!givenKey) {
+        return;
       }
+      var key = options.allowDots ? givenKey.replace(/\.([^.[]+)/g, "[$1]") : givenKey;
       var brackets = /(\[[^[\]]*])/;
       var child = /(\[[^[\]]*])/g;
-      var segment = brackets.exec(key);
+      var segment = options.depth > 0 && brackets.exec(key);
       var parent = segment ? key.slice(0, segment.index) : key;
       var keys = [];
       if (parent) {
@@ -27839,34 +27744,23 @@ var AMLLBundle = (function() {
             return;
           }
         }
-        keys[keys.length] = parent;
+        keys.push(parent);
       }
       var i2 = 0;
-      while ((segment = child.exec(key)) !== null && i2 < options.depth) {
+      while (options.depth > 0 && (segment = child.exec(key)) !== null && i2 < options.depth) {
         i2 += 1;
-        var segmentContent = segment[1].slice(1, -1);
-        if (!options.plainObjects && has.call(Object.prototype, segmentContent)) {
+        if (!options.plainObjects && has.call(Object.prototype, segment[1].slice(1, -1))) {
           if (!options.allowPrototypes) {
             return;
           }
         }
-        keys[keys.length] = segment[1];
+        keys.push(segment[1]);
       }
       if (segment) {
         if (options.strictDepth === true) {
           throw new RangeError("Input depth exceeded depth option of " + options.depth + " and strictDepth is true");
         }
-        keys[keys.length] = "[" + key.slice(segment.index) + "]";
-      }
-      return keys;
-    };
-    var parseKeys = function parseQueryStringKeys(givenKey, val, options, valuesParsed) {
-      if (!givenKey) {
-        return;
-      }
-      var keys = splitKeyIntoSegments(givenKey, options);
-      if (!keys) {
-        return;
+        keys.push("[" + key.slice(segment.index) + "]");
       }
       return parseObject(keys, val, options, valuesParsed);
     };
@@ -27916,7 +27810,6 @@ var AMLLBundle = (function() {
         parseArrays: opts.parseArrays !== false,
         plainObjects: typeof opts.plainObjects === "boolean" ? opts.plainObjects : defaults.plainObjects,
         strictDepth: typeof opts.strictDepth === "boolean" ? !!opts.strictDepth : defaults.strictDepth,
-        strictMerge: typeof opts.strictMerge === "boolean" ? !!opts.strictMerge : defaults.strictMerge,
         strictNullHandling: typeof opts.strictNullHandling === "boolean" ? opts.strictNullHandling : defaults.strictNullHandling,
         throwOnLimitExceeded: typeof opts.throwOnLimitExceeded === "boolean" ? opts.throwOnLimitExceeded : false
       };
@@ -41940,23 +41833,24 @@ void main(void)
       this.renderer.dispose(), this.element.remove();
     }
   }, L$1 = {
-    lyricLine: "_lyricLine_8a8j6_11",
-    lyricBgLine: "_lyricBgLine_8a8j6_99",
-    active: "_active_8a8j6_125",
-    hasDuetLine: "_hasDuetLine_8a8j6_157",
-    lyricDuetLine: "_lyricDuetLine_8a8j6_159",
-    lyricMainLine: "_lyricMainLine_8a8j6_197",
-    romanWord: "_romanWord_8a8j6_231",
-    rubyWord: "_rubyWord_8a8j6_245",
-    wordWithRuby: "_wordWithRuby_8a8j6_261",
-    wordBody: "_wordBody_8a8j6_275",
-    emphasizeWrapper: "_emphasizeWrapper_8a8j6_289",
-    emphasize: "_emphasize_8a8j6_289",
-    lyricSubLine: "_lyricSubLine_8a8j6_337",
-    disableSpring: "_disableSpring_8a8j6_351",
-    interludeDots: "_interludeDots_8a8j6_367",
-    enabled: "_enabled_8a8j6_391",
-    tmpDisableTransition: "_tmpDisableTransition_8a8j6_443"
+    lyricLine: "_lyricLine_gmpzk_11",
+    lyricBgLine: "_lyricBgLine_gmpzk_99",
+    active: "_active_gmpzk_125",
+    hasDuetLine: "_hasDuetLine_gmpzk_157",
+    lyricDuetLine: "_lyricDuetLine_gmpzk_159",
+    lyricMainLine: "_lyricMainLine_gmpzk_197",
+    romanWord: "_romanWord_gmpzk_231",
+    rubyWord: "_rubyWord_gmpzk_245",
+    wordWithRuby: "_wordWithRuby_gmpzk_261",
+    wordBody: "_wordBody_gmpzk_275",
+    emphasizeWrapper: "_emphasizeWrapper_gmpzk_289",
+    emphasize: "_emphasize_gmpzk_289",
+    lyricSubLine: "_lyricSubLine_gmpzk_337",
+    disableSpring: "_disableSpring_gmpzk_351",
+    interludeDots: "_interludeDots_gmpzk_367",
+    enabled: "_enabled_gmpzk_391",
+    tmpDisableTransition: "_tmpDisableTransition_gmpzk_443",
+    bottomLine: "_bottomLine_gmpzk_451"
   }, he$1 = typeof self == "object" ? self : globalThis, ge$1 = (e7, t2) => {
     let n2 = (t3, n3) => (e7.set(n3, t3), t3), r2 = (i2) => {
       if (e7.has(i2)) return e7.get(i2);
@@ -42172,13 +42066,13 @@ void main(void)
         e7[n3].isBG && n3--, n3 >= 0 && (r2 = e7[n3]);
       }
       let i2 = 0, a2 = 0;
-      if (r2) if (n2.startTime >= r2.endTime) i2 = 1e3, a2 = r2.endTime;
+      if (r2) if (n2.startTime >= r2.endTime) i2 = 600, a2 = r2.endTime;
       else {
         i2 = 400;
         let e8 = r2.endTime - r2.startTime;
         a2 = r2.startTime + e8 * 0.3;
       }
-      else i2 = 1e3, a2 = 0;
+      else i2 = 600, a2 = 0;
       let o2 = n2.startTime - i2, s2 = Math.max(a2, o2);
       s2 < n2.startTime && (n2.startTime = s2);
       let c2 = e7[t2 + 1];
@@ -42313,8 +42207,10 @@ void main(void)
       posX: new H$1(0),
       posY: new H$1(0)
     };
+    isFocused = false;
+    blur = 0;
     constructor(e7) {
-      this.lyricPlayer = e7, this.element.setAttribute("class", L$1.lyricLine), this.rebuildStyle();
+      this.lyricPlayer = e7, this.element.setAttribute("class", `${L$1.lyricLine} ${L$1.bottomLine}`), this.element.dataset.bottomLine = "true", this.rebuildStyle();
     }
     async measureSize() {
       return await ze$1(() => [this.element.clientWidth, this.element.clientHeight]);
@@ -42326,17 +42222,20 @@ void main(void)
     hide() {
       this.rebuildStyle();
     }
+    setFocused(e7) {
+      this.isFocused !== e7 && (this.isFocused = e7, e7 ? this.element.dataset.focused = "true" : delete this.element.dataset.focused);
+    }
     rebuildStyle() {
       let e7 = `transform:translate(${this.lineTransforms.posX.getCurrentPosition().toFixed(2)}px,${this.lineTransforms.posY.getCurrentPosition().toFixed(2)}px);`;
-      !this.lyricPlayer.getEnableSpring() && this.isInSight && (e7 += `transition-delay:${this.delay}ms;`), e7 !== this.lastStyle && (this.lastStyle = e7, this.element.setAttribute("style", e7));
+      !this.lyricPlayer.getEnableSpring() && this.isInSight && (e7 += `transition-delay:${this.delay}ms;`), e7 += `filter:blur(${Math.min(5, this.blur)}px);`, e7 !== this.lastStyle && (this.lastStyle = e7, this.element.setAttribute("style", e7));
     }
     getElement() {
       return this.element;
     }
-    setTransform(e7 = this.left, t2 = this.top, n2 = false, r2 = 0) {
-      this.left = e7, this.top = t2, this.delay = r2 * 1e3 | 0, n2 || !this.lyricPlayer.getEnableSpring() ? (n2 && this.element.classList.add(L$1.tmpDisableTransition), this.lineTransforms.posX.setPosition(e7), this.lineTransforms.posY.setPosition(t2), this.lyricPlayer.getEnableSpring() ? this.rebuildStyle() : this.show(), n2 && requestAnimationFrame(() => {
+    setTransform(e7 = this.left, t2 = this.top, n2 = 0, r2 = false, i2 = 0) {
+      this.left = e7, this.top = t2, this.delay = i2 * 1e3 | 0, r2 || !this.lyricPlayer.getEnableSpring() ? (this.blur = Math.min(32, n2), r2 && this.element.classList.add(L$1.tmpDisableTransition), this.lineTransforms.posX.setPosition(e7), this.lineTransforms.posY.setPosition(t2), this.lyricPlayer.getEnableSpring() ? this.rebuildStyle() : this.show(), r2 && requestAnimationFrame(() => {
         this.element.classList.remove(L$1.tmpDisableTransition);
-      })) : (this.lineTransforms.posX.setTargetPosition(e7, r2), this.lineTransforms.posY.setTargetPosition(t2, r2));
+      })) : (this.blur = Math.min(5, n2), this.lineTransforms.posX.setTargetPosition(e7, i2), this.lineTransforms.posY.setTargetPosition(t2, i2));
     }
     update(e7 = 0) {
       this.lyricPlayer.getEnableSpring() && (this.lineTransforms.posX.update(e7), this.lineTransforms.posY.update(e7), this.isInSight ? this.show() : this.hide());
@@ -42491,6 +42390,7 @@ void main(void)
     }));
     wordFadeWidth = 0.5;
     targetAlignIndex = 0;
+    lastInterludeState = false;
     constructor(e7) {
       super(), e7 && (this.element = e7), this.element.classList.add("amll-lyric-player"), this.resizeObserver.observe(this.element), this.resizeObserver.observe(this.interludeDots.getElement()), this.element.appendChild(this.interludeDots.getElement()), this.element.appendChild(this.bottomLine.getElement()), this.interludeDots.setTransform(0, 200), window.addEventListener("pageshow", this.onPageShow), window.addEventListener("pagehide", this.onPageHide);
       let t2 = 0, n2 = 0, r2 = 0, i2 = 0, a2 = 0, o2 = 0, s2 = 0, c2 = 0;
@@ -42681,44 +42581,75 @@ void main(void)
         for (let e8 of r2) this.bufferedLines.delete(e8), this.currentLyricLineObjects[e8]?.disable();
         this.bufferedLines.size > 0 && (this.scrollToIndex = Math.min(...this.bufferedLines)), this.calcLayout();
       }
-      this.lastCurrentTime = e7;
-    }
-    async calcLayout(e7 = false, t2 = false) {
-      let n2 = this.getCurrentInterlude(), r2 = -this.scrollOffset, i2 = this.scrollToIndex, a2 = false;
-      n2 ? a2 = n2[3] : this.interludeDots.setInterlude(void 0);
-      let o2 = (this.baseFontSize || 24) * 0.4, s2 = this.interludeDotsSize[1] + o2 * 2;
-      n2 && n2[2] !== -1 && (r2 -= s2);
-      let c2 = this.size[1] / 5, l2 = this.currentLyricLineObjects.slice(0, i2).reduce((e8, t3) => e8 + (t3.getLine().isBG && this.isPlaying ? 0 : this.lyricLinesSize.get(t3)?.[1] ?? c2), 0);
-      this.scrollBoundary[0] = -l2, r2 -= l2, r2 += this.size[1] * this.alignPosition;
-      let u2 = this.currentLyricLineObjects[i2];
-      if (this.targetAlignIndex = i2, u2) {
-        let e8 = this.lyricLinesSize.get(u2)?.[1] ?? c2;
-        switch (this.alignAnchor) {
-          case "bottom":
-            r2 -= e8;
-            break;
-          case "center":
-            r2 -= e8 / 2;
-            break;
+      if (this.bufferedLines.size === 0 && this.processedLines.length > 0) {
+        let t3 = this.processedLines[this.processedLines.length - 1], n3 = this.bottomLine.getElement().innerHTML.trim().length > 0;
+        if (e7 >= t3.endTime) {
+          let e8 = n3 ? this.processedLines.length : this.processedLines.length - 1;
+          this.scrollToIndex !== e8 && (this.scrollToIndex = e8, this.calcLayout());
         }
       }
-      let d2 = Math.max(...this.bufferedLines), f2 = 0, p2 = e7 ? 0 : 0.05, m2 = false;
-      this.currentLyricLineObjects.forEach((e8, i3) => {
-        let s3 = this.bufferedLines.has(i3), l3 = s3 || i3 >= this.scrollToIndex && i3 < d2, u3 = e8.getLine(), h2 = n2 && i3 === n2[2] + 1;
-        if (!m2 && h2) {
-          m2 = true, r2 += o2;
+      this.lastCurrentTime = e7;
+    }
+    updateDynamicSpringParams() {
+      if (!this.getEnableSpring() || this.processedLines.length === 0) return;
+      let e7 = this.scrollToIndex, t2 = this.processedLines[e7], n2 = this.processedLines[e7 - 1];
+      if (t2 && n2) {
+        let e8 = t2.startTime - (n2?.words[0]?.startTime ?? n2.startTime), r2 = 1 - (Math.max(100, Math.min(800, e8)) - 100) / 700;
+        r2 **= 0.2;
+        let i2 = 170 + r2 * 50, a2 = Math.sqrt(i2) * 2.2;
+        this.setLinePosYSpringParams({
+          stiffness: i2,
+          damping: a2
+        });
+      }
+    }
+    async calcLayout(e7 = false, t2 = false) {
+      let n2 = this.getCurrentInterlude(), r2 = !!n2;
+      (this.targetAlignIndex !== this.scrollToIndex || this.lastInterludeState !== r2) && (this.lastInterludeState = r2, this.isSeeking || r2 ? this.setLinePosYSpringParams({
+        stiffness: 90,
+        damping: 15
+      }) : this.updateDynamicSpringParams());
+      let i2 = -this.scrollOffset, a2 = this.scrollToIndex, o2 = false;
+      n2 ? o2 = n2[3] : this.interludeDots.setInterlude(void 0);
+      let s2 = (this.baseFontSize || 24) * 0.4, c2 = this.interludeDotsSize[1] + s2 * 2;
+      n2 && n2[2] !== -1 && (i2 -= c2);
+      let l2 = this.size[1] / 5, u2 = this.currentLyricLineObjects.slice(0, a2).reduce((e8, t3) => e8 + (t3.getLine().isBG && this.isPlaying ? 0 : this.lyricLinesSize.get(t3)?.[1] ?? l2), 0);
+      this.scrollBoundary[0] = -u2, i2 -= u2, i2 += this.size[1] * this.alignPosition;
+      let d2 = this.currentLyricLineObjects[a2];
+      this.targetAlignIndex = a2;
+      let f2 = a2 === this.currentLyricLineObjects.length;
+      this.bottomLine.setFocused(f2);
+      let p2 = 0;
+      if (d2 ? p2 = this.lyricLinesSize.get(d2)?.[1] ?? l2 : f2 && (p2 = this.bottomLine.lineSize[1]), p2 > 0) switch (this.alignAnchor) {
+        case "bottom":
+          i2 -= p2;
+          break;
+        case "center":
+          i2 -= p2 / 2;
+          break;
+      }
+      let m2 = Math.max(...this.bufferedLines), h2 = 0, g2 = e7 ? 0 : 0.05, _2 = false;
+      this.currentLyricLineObjects.forEach((e8, r3) => {
+        let a3 = this.bufferedLines.has(r3), c3 = a3 || r3 >= this.scrollToIndex && r3 < m2, u3 = e8.getLine(), d3 = n2 && r3 === n2[2] + 1;
+        if (!_2 && d3) {
+          _2 = true, i2 += s2;
           let e9 = 0;
-          n2 && a2 && (e9 = this.size[0] - this.interludeDotsSize[0]), this.interludeDots.setTransform(e9, r2), n2 && this.interludeDots.setInterlude([n2[0], n2[1]]), r2 += this.interludeDotsSize[1], r2 += o2;
+          n2 && o2 && (e9 = this.size[0] - this.interludeDotsSize[0]), this.interludeDots.setTransform(e9, i2), n2 && this.interludeDots.setInterlude([n2[0], n2[1]]), i2 += this.interludeDotsSize[1], i2 += s2;
         }
-        let g2;
-        g2 = this.hidePassedLines && i3 < (n2 ? n2[2] + 1 : this.scrollToIndex) && this.isPlaying ? 1e-5 : s3 ? 0.85 : this.isNonDynamic ? 0.2 : 1;
-        let _2 = 0;
-        this.enableBlur && (l3 ? _2 = 0 : (_2 = 1, i3 < this.scrollToIndex ? _2 += Math.abs(this.scrollToIndex - i3) + 1 : _2 += Math.abs(i3 - Math.max(this.scrollToIndex, d2))));
-        let v2 = this.enableScale ? 97 : 100, y2 = 100;
-        !l3 && this.isPlaying && (y2 = u3.isBG ? 75 : v2), this.isUserScrolling && (_2 = 0);
-        let b2 = l3 ? $$1.GRADIENT : $$1.SOLID;
-        e8.setTransform(r2, y2, g2, window.innerWidth <= 1024 ? _2 * 0.8 : _2, t2, f2, b2), u3.isBG && (l3 || !this.isPlaying) ? r2 += this.lyricLinesSize.get(e8)?.[1] ?? c2 : u3.isBG || (r2 += this.lyricLinesSize.get(e8)?.[1] ?? c2), r2 >= 0 && !this.isSeeking && (u3.isBG || (f2 += p2), i3 >= this.scrollToIndex && (p2 /= 1.05));
-      }), this.scrollBoundary[1] = r2 + this.scrollOffset - this.size[1] / 2, this.bottomLine.setTransform(0, r2, t2, f2);
+        let f3;
+        f3 = this.hidePassedLines && r3 < (n2 ? n2[2] + 1 : this.scrollToIndex) && this.isPlaying ? 1e-5 : a3 ? 0.85 : this.isNonDynamic ? 0.2 : 1;
+        let p3 = this.calculateBlur(r3, c3, m2), v3 = this.enableScale ? 97 : 100, y3 = 100;
+        !c3 && this.isPlaying && (y3 = u3.isBG ? 75 : v3);
+        let b2 = c3 ? $$1.GRADIENT : $$1.SOLID;
+        e8.setTransform(i2, y3, f3, p3, t2, h2, b2), u3.isBG && (c3 || !this.isPlaying) ? i2 += this.lyricLinesSize.get(e8)?.[1] ?? l2 : u3.isBG || (i2 += this.lyricLinesSize.get(e8)?.[1] ?? l2), i2 >= 0 && !this.isSeeking && (u3.isBG || (h2 += g2), r3 >= this.scrollToIndex && (g2 /= 1.05));
+      }), this.scrollBoundary[1] = i2 + this.scrollOffset - this.size[1] / 2;
+      let v2 = this.currentLyricLineObjects.length, y2 = this.calculateBlur(v2, f2, m2);
+      this.bottomLine.setTransform(0, i2, y2, t2, h2);
+    }
+    calculateBlur(e7, t2, n2) {
+      if (!this.enableBlur || this.isUserScrolling || t2) return 0;
+      let r2 = 1;
+      return e7 < this.scrollToIndex ? r2 += Math.abs(this.scrollToIndex - e7) + 1 : r2 += Math.abs(e7 - Math.max(this.scrollToIndex, n2)), window.innerWidth <= 1024 ? r2 * 0.8 : r2;
     }
     setLinePosXSpringParams(e7 = {}) {
     }
@@ -42747,7 +42678,7 @@ void main(void)
       this.interludeDots.resume(), this.isPlaying || (this.isPlaying = true, this.calcLayout());
     }
     update(e7 = 0) {
-      this.bottomLine.update(e7 / 1e3), this.interludeDots.update(e7 / 1e3);
+      this.bottomLine.update(e7 / 1e3), this.interludeDots.update(e7);
     }
     onResize() {
     }
@@ -42947,6 +42878,7 @@ void main(void)
     currentDarkAlpha = 0.2;
     targetBrightAlpha = 1;
     targetDarkAlpha = 0.2;
+    segmenter = new Intl.Segmenter(void 0, { granularity: "grapheme" });
     constructor(e7, t2 = {
       words: [],
       translatedLyric: "",
@@ -43085,7 +43017,7 @@ void main(void)
       let c2 = this.lyricPlayer.processObsceneWord(e7);
       if (t2) {
         i2.classList.add(L$1.emphasize);
-        for (let e8 of c2.trim()) {
+        for (let { segment: e8 } of this.segmenter.segment(c2.trim())) {
           let t3 = document.createElement("span");
           t3.innerText = e8, a2.push(t3), s2.appendChild(t3);
         }
@@ -43407,7 +43339,6 @@ void main(void)
     update(e7 = 0) {
       if (!this.initialLayoutFinished || (super.update(e7), this.supportMaskImage || this.element.style.setProperty("--amll-player-time", `${this.currentTime}`), !this.isPageVisible)) return;
       let t2 = e7 / 1e3;
-      this.interludeDots.update(e7), this.bottomLine.update(t2);
       for (let e8 of this.currentLyricLineObjects) e8.update(t2);
     }
     dispose() {
@@ -44084,7 +44015,6 @@ void main(void)
     update(e7 = 0) {
       if (!this.initialLayoutFinished || (super.update(e7), !this.isPageVisible)) return;
       let t2 = e7 / 1e3;
-      this.interludeDots.update(e7), this.bottomLine.update(t2);
       for (let e8 of this.currentLyricLineObjects) e8.update(t2);
     }
     async calcLayout(e7) {
@@ -48942,17 +48872,17 @@ void main(void)
       m2.length,
       m2.join("-")
     ]);
-    let ee2 = [];
+    let O2 = [];
     if (p2 !== w2) {
       let e3 = [...p2];
       for (let t3 = 0; t3 < E2.length; t3++) {
         let n3 = E2[t3], r3 = bl(n3);
-        m2.includes(r3) || (e3.splice(t3, 0, n3), ee2.push(n3));
+        m2.includes(r3) || (e3.splice(t3, 0, n3), O2.push(n3));
       }
-      return a2 === "wait" && ee2.length && (e3 = ee2), D2(xl(e3)), T2(p2), null;
+      return a2 === "wait" && O2.length && (e3 = O2), D2(xl(e3)), T2(p2), null;
     }
     a2 === "wait" && E2.length > 1 && console.warn(`You're attempting to animate multiple children within AnimatePresence, but its mode is set to "wait". This will lead to odd visual behaviour.`);
-    let { forceRender: O2 } = reactExports.useContext(xe);
+    let { forceRender: ee2 } = reactExports.useContext(xe);
     return jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: E2.map((e3) => {
       let d2 = bl(e3), _2 = o2 && !u2 ? false : p2 === E2 || m2.includes(d2);
       return jsxRuntimeExports.jsx(_l, {
@@ -48969,7 +48899,7 @@ void main(void)
           let e4 = true;
           S2.forEach((t3) => {
             t3 || (e4 = false);
-          }), e4 && (O2?.(), D2(g2.current), o2 && f2?.(), r2 && r2());
+          }), e4 && (ee2?.(), D2(g2.current), o2 && f2?.(), r2 && r2());
         },
         anchorX: s2,
         anchorY: c2,
@@ -50495,20 +50425,20 @@ void main(void)
         y2.set(e4);
       }
     });
-    let ee2 = () => {
+    let O2 = () => {
       af(C2, 0, {
         type: "tween",
         ease: "easeOut",
         duration: 0.28
       });
-    }, O2 = () => {
+    }, ee2 = () => {
       af(C2, vf, {
         type: "spring",
         damping: 12,
         stiffness: 200
       });
     }, te2 = (e3) => {
-      E2.current = true, h2.current && (g2.current = h2.current.getBoundingClientRect()), ee2(), c2?.(), l2?.(true);
+      E2.current = true, h2.current && (g2.current = h2.current.getBoundingClientRect()), O2(), c2?.(), l2?.(true);
     }, ne2 = (e3, t3) => {
       let n3 = g2.current;
       if (!n3) return;
@@ -50517,11 +50447,11 @@ void main(void)
       let s3 = Math.max(0, Math.min(1, a3)), c3 = r2 + s3 * (i2 - r2);
       D2.current = c3, y2.set(s3), p2 && o2?.(c3);
     }, re2 = () => {
-      E2.current = false, g2.current = null, _2.current ? ee2() : O2(), T2.set(0), l2?.(false), o2?.(D2.current), s2?.(D2.current);
+      E2.current = false, g2.current = null, _2.current ? O2() : ee2(), T2.set(0), l2?.(false), o2?.(D2.current), s2?.(D2.current);
     }, ie2 = () => {
-      _2.current = true, E2.current || ee2();
+      _2.current = true, E2.current || O2();
     }, k2 = () => {
-      _2.current = false, E2.current || O2();
+      _2.current = false, E2.current || ee2();
     }, ae2 = (e3, t3) => {
       let n3 = h2.current?.getBoundingClientRect();
       if (!n3) return;
@@ -51032,7 +50962,7 @@ void main(void)
       ref: g2
     });
   });
-  reactExports.forwardRef(({ disabled: e2, playing: t2, alignAnchor: n2, alignPosition: r2, enableSpring: i2, enableBlur: a2, enableScale: o2, maskObsceneWordsMode: s2, maskObsceneWordChar: c2, hidePassedLines: l2, lyricLines: u2, currentTime: d2, isSeeking: p2, wordFadeWidth: h2, linePosXSpringParams: _2, linePosYSpringParams: C2, lineScaleSpringParams: w2, bottomLine: T2, lyricPlayer: E2, onLyricLineClick: O2, onLyricLineContextMenu: te2, ...ne2 }, re2) => {
+  reactExports.forwardRef(({ disabled: e2, playing: t2, alignAnchor: n2, alignPosition: r2, enableSpring: i2, enableBlur: a2, enableScale: o2, maskObsceneWordsMode: s2, maskObsceneWordChar: c2, hidePassedLines: l2, lyricLines: u2, currentTime: d2, isSeeking: p2, wordFadeWidth: h2, linePosXSpringParams: _2, linePosYSpringParams: C2, lineScaleSpringParams: w2, bottomLine: T2, lyricPlayer: E2, onLyricLineClick: ee2, onLyricLineContextMenu: te2, ...ne2 }, re2) => {
     let [k2, ae2] = reactExports.useState(), A2 = reactExports.useRef(null), oe2 = reactExports.useRef(d2);
     return reactExports.useLayoutEffect(() => {
       let e3 = new (E2 ?? ft$1)();
@@ -51085,11 +51015,11 @@ void main(void)
     }, [k2, s2]), reactExports.useEffect(() => {
       c2 !== void 0 && k2?.setMaskObsceneWordChar(c2);
     }, [k2, c2]), reactExports.useEffect(() => {
-      if (O2) {
-        let e3 = (e4) => O2(e4);
+      if (ee2) {
+        let e3 = (e4) => ee2(e4);
         return k2?.addEventListener("line-click", e3), () => k2?.removeEventListener("line-click", e3);
       }
-    }, [k2, O2]), reactExports.useEffect(() => {
+    }, [k2, ee2]), reactExports.useEffect(() => {
       if (te2) {
         let e3 = (e4) => te2(e4);
         return k2?.addEventListener("line-contextmenu", e3), () => k2?.removeEventListener("line-contextmenu", e3);
