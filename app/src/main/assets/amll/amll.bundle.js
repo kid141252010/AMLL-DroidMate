@@ -2807,7 +2807,7 @@ var AMLLBundle = (function() {
   }
   var jsxRuntimeExports = requireJsxRuntime();
   var reactExports = requireReact();
-  const t$2 = /* @__PURE__ */ getDefaultExportFromCjs(reactExports);
+  const t$3 = /* @__PURE__ */ getDefaultExportFromCjs(reactExports);
   var client = {};
   var reactDom = { exports: {} };
   var reactDom_development = {};
@@ -25110,7 +25110,7 @@ var AMLLBundle = (function() {
       return inside;
     }
     function splitPolygon(a2, b2) {
-      var a22 = new Node(a2.i, a2.x, a2.y), b22 = new Node(b2.i, b2.x, b2.y), an2 = a2.next, bp = b2.prev;
+      var a22 = new Node2(a2.i, a2.x, a2.y), b22 = new Node2(b2.i, b2.x, b2.y), an2 = a2.next, bp = b2.prev;
       a2.next = b2;
       b2.prev = a2;
       a22.next = an2;
@@ -25122,7 +25122,7 @@ var AMLLBundle = (function() {
       return b22;
     }
     function insertNode(i2, x2, y2, last) {
-      var p2 = new Node(i2, x2, y2);
+      var p2 = new Node2(i2, x2, y2);
       if (!last) {
         p2.prev = p2;
         p2.next = p2;
@@ -25140,7 +25140,7 @@ var AMLLBundle = (function() {
       if (p2.prevZ) p2.prevZ.nextZ = p2.nextZ;
       if (p2.nextZ) p2.nextZ.prevZ = p2.prevZ;
     }
-    function Node(i2, x2, y2) {
+    function Node2(i2, x2, y2) {
       this.i = i2;
       this.x = x2;
       this.y = y2;
@@ -27101,12 +27101,27 @@ var AMLLBundle = (function() {
     if (hasRequiredUtils) return utils;
     hasRequiredUtils = 1;
     var formats2 = /* @__PURE__ */ requireFormats();
+    var getSideChannel = requireSideChannel();
     var has = Object.prototype.hasOwnProperty;
     var isArray = Array.isArray;
+    var overflowChannel = getSideChannel();
+    var markOverflow = function markOverflow2(obj, maxIndex) {
+      overflowChannel.set(obj, maxIndex);
+      return obj;
+    };
+    var isOverflow = function isOverflow2(obj) {
+      return overflowChannel.has(obj);
+    };
+    var getMaxIndex = function getMaxIndex2(obj) {
+      return overflowChannel.get(obj);
+    };
+    var setMaxIndex = function setMaxIndex2(obj, maxIndex) {
+      overflowChannel.set(obj, maxIndex);
+    };
     var hexTable = (function() {
       var array = [];
       for (var i2 = 0; i2 < 256; ++i2) {
-        array.push("%" + ((i2 < 16 ? "0" : "") + i2.toString(16)).toUpperCase());
+        array[array.length] = "%" + ((i2 < 16 ? "0" : "") + i2.toString(16)).toUpperCase();
       }
       return array;
     })();
@@ -27118,7 +27133,7 @@ var AMLLBundle = (function() {
           var compacted = [];
           for (var j2 = 0; j2 < obj.length; ++j2) {
             if (typeof obj[j2] !== "undefined") {
-              compacted.push(obj[j2]);
+              compacted[compacted.length] = obj[j2];
             }
           }
           item.obj[item.prop] = compacted;
@@ -27140,9 +27155,19 @@ var AMLLBundle = (function() {
       }
       if (typeof source !== "object" && typeof source !== "function") {
         if (isArray(target)) {
-          target.push(source);
+          var nextIndex = target.length;
+          if (options && typeof options.arrayLimit === "number" && nextIndex > options.arrayLimit) {
+            return markOverflow(arrayToObject(target.concat(source), options), nextIndex);
+          }
+          target[nextIndex] = source;
         } else if (target && typeof target === "object") {
-          if (options && (options.plainObjects || options.allowPrototypes) || !has.call(Object.prototype, source)) {
+          if (isOverflow(target)) {
+            var newIndex = getMaxIndex(target) + 1;
+            target[newIndex] = source;
+            setMaxIndex(target, newIndex);
+          } else if (options && options.strictMerge) {
+            return [target, source];
+          } else if (options && (options.plainObjects || options.allowPrototypes) || !has.call(Object.prototype, source)) {
             target[source] = true;
           }
         } else {
@@ -27151,7 +27176,20 @@ var AMLLBundle = (function() {
         return target;
       }
       if (!target || typeof target !== "object") {
-        return [target].concat(source);
+        if (isOverflow(source)) {
+          var sourceKeys = Object.keys(source);
+          var result = options && options.plainObjects ? { __proto__: null, 0: target } : { 0: target };
+          for (var m2 = 0; m2 < sourceKeys.length; m2++) {
+            var oldKey = parseInt(sourceKeys[m2], 10);
+            result[oldKey + 1] = source[sourceKeys[m2]];
+          }
+          return markOverflow(result, getMaxIndex(source) + 1);
+        }
+        var combined = [target].concat(source);
+        if (options && typeof options.arrayLimit === "number" && combined.length > options.arrayLimit) {
+          return markOverflow(arrayToObject(combined, options), combined.length - 1);
+        }
+        return combined;
       }
       var mergeTarget = target;
       if (isArray(target) && !isArray(source)) {
@@ -27164,7 +27202,7 @@ var AMLLBundle = (function() {
             if (targetItem && typeof targetItem === "object" && item && typeof item === "object") {
               target[i2] = merge2(targetItem, item, options);
             } else {
-              target.push(item);
+              target[target.length] = item;
             }
           } else {
             target[i2] = item;
@@ -27178,6 +27216,15 @@ var AMLLBundle = (function() {
           acc[key] = merge2(acc[key], value, options);
         } else {
           acc[key] = value;
+        }
+        if (isOverflow(source) && !isOverflow(acc)) {
+          markOverflow(acc, getMaxIndex(source));
+        }
+        if (isOverflow(acc)) {
+          var keyNum = parseInt(key, 10);
+          if (String(keyNum) === key && keyNum >= 0 && keyNum > getMaxIndex(acc)) {
+            setMaxIndex(acc, keyNum);
+          }
         }
         return acc;
       }, mergeTarget);
@@ -27256,8 +27303,8 @@ var AMLLBundle = (function() {
           var key = keys[j2];
           var val = obj[key];
           if (typeof val === "object" && val !== null && refs.indexOf(val) === -1) {
-            queue.push({ obj, prop: key });
-            refs.push(val);
+            queue[queue.length] = { obj, prop: key };
+            refs[refs.length] = val;
           }
         }
       }
@@ -27273,14 +27320,24 @@ var AMLLBundle = (function() {
       }
       return !!(obj.constructor && obj.constructor.isBuffer && obj.constructor.isBuffer(obj));
     };
-    var combine = function combine2(a2, b2) {
-      return [].concat(a2, b2);
+    var combine = function combine2(a2, b2, arrayLimit, plainObjects) {
+      if (isOverflow(a2)) {
+        var newIndex = getMaxIndex(a2) + 1;
+        a2[newIndex] = b2;
+        setMaxIndex(a2, newIndex);
+        return a2;
+      }
+      var result = [].concat(a2, b2);
+      if (result.length > arrayLimit) {
+        return markOverflow(arrayToObject(result, { plainObjects }), result.length - 1);
+      }
+      return result;
     };
     var maybeMap = function maybeMap2(val, fn2) {
       if (isArray(val)) {
         var mapped = [];
         for (var i2 = 0; i2 < val.length; i2 += 1) {
-          mapped.push(fn2(val[i2]));
+          mapped[mapped.length] = fn2(val[i2]);
         }
         return mapped;
       }
@@ -27294,7 +27351,9 @@ var AMLLBundle = (function() {
       decode,
       encode,
       isBuffer,
+      isOverflow,
       isRegExp,
+      markOverflow,
       maybeMap,
       merge
     };
@@ -27611,6 +27670,7 @@ var AMLLBundle = (function() {
       parseArrays: true,
       plainObjects: false,
       strictDepth: false,
+      strictMerge: true,
       strictNullHandling: false,
       throwOnLimitExceeded: false
     };
@@ -27672,16 +27732,18 @@ var AMLLBundle = (function() {
           val = options.strictNullHandling ? null : "";
         } else {
           key = options.decoder(part.slice(0, pos), defaults.decoder, charset, "key");
-          val = utils2.maybeMap(
-            parseArrayValue(
-              part.slice(pos + 1),
-              options,
-              isArray(obj[key]) ? obj[key].length : 0
-            ),
-            function(encodedVal) {
-              return options.decoder(encodedVal, defaults.decoder, charset, "value");
-            }
-          );
+          if (key !== null) {
+            val = utils2.maybeMap(
+              parseArrayValue(
+                part.slice(pos + 1),
+                options,
+                isArray(obj[key]) ? obj[key].length : 0
+              ),
+              function(encodedVal) {
+                return options.decoder(encodedVal, defaults.decoder, charset, "value");
+              }
+            );
+          }
         }
         if (val && options.interpretNumericEntities && charset === "iso-8859-1") {
           val = interpretNumericEntities(String(val));
@@ -27689,11 +27751,24 @@ var AMLLBundle = (function() {
         if (part.indexOf("[]=") > -1) {
           val = isArray(val) ? [val] : val;
         }
-        var existing = has.call(obj, key);
-        if (existing && options.duplicates === "combine") {
-          obj[key] = utils2.combine(obj[key], val);
-        } else if (!existing || options.duplicates === "last") {
-          obj[key] = val;
+        if (options.comma && isArray(val) && val.length > options.arrayLimit) {
+          if (options.throwOnLimitExceeded) {
+            throw new RangeError("Array limit exceeded. Only " + options.arrayLimit + " element" + (options.arrayLimit === 1 ? "" : "s") + " allowed in an array.");
+          }
+          val = utils2.combine([], val, options.arrayLimit, options.plainObjects);
+        }
+        if (key !== null) {
+          var existing = has.call(obj, key);
+          if (existing && (options.duplicates === "combine" || part.indexOf("[]=") > -1)) {
+            obj[key] = utils2.combine(
+              obj[key],
+              val,
+              options.arrayLimit,
+              options.plainObjects
+            );
+          } else if (!existing || options.duplicates === "last") {
+            obj[key] = val;
+          }
         }
       }
       return obj;
@@ -27709,17 +27784,32 @@ var AMLLBundle = (function() {
         var obj;
         var root = chain[i2];
         if (root === "[]" && options.parseArrays) {
-          obj = options.allowEmptyArrays && (leaf === "" || options.strictNullHandling && leaf === null) ? [] : utils2.combine([], leaf);
+          if (utils2.isOverflow(leaf)) {
+            obj = leaf;
+          } else {
+            obj = options.allowEmptyArrays && (leaf === "" || options.strictNullHandling && leaf === null) ? [] : utils2.combine(
+              [],
+              leaf,
+              options.arrayLimit,
+              options.plainObjects
+            );
+          }
         } else {
           obj = options.plainObjects ? { __proto__: null } : {};
           var cleanRoot = root.charAt(0) === "[" && root.charAt(root.length - 1) === "]" ? root.slice(1, -1) : root;
           var decodedRoot = options.decodeDotInKeys ? cleanRoot.replace(/%2E/g, ".") : cleanRoot;
           var index = parseInt(decodedRoot, 10);
+          var isValidArrayIndex = !isNaN(index) && root !== decodedRoot && String(index) === decodedRoot && index >= 0 && options.parseArrays;
           if (!options.parseArrays && decodedRoot === "") {
             obj = { 0: leaf };
-          } else if (!isNaN(index) && root !== decodedRoot && String(index) === decodedRoot && index >= 0 && (options.parseArrays && index <= options.arrayLimit)) {
+          } else if (isValidArrayIndex && index < options.arrayLimit) {
             obj = [];
             obj[index] = leaf;
+          } else if (isValidArrayIndex && options.throwOnLimitExceeded) {
+            throw new RangeError("Array limit exceeded. Only " + options.arrayLimit + " element" + (options.arrayLimit === 1 ? "" : "s") + " allowed in an array.");
+          } else if (isValidArrayIndex) {
+            obj[index] = leaf;
+            utils2.markOverflow(obj, index);
           } else if (decodedRoot !== "__proto__") {
             obj[decodedRoot] = leaf;
           }
@@ -27728,14 +27818,19 @@ var AMLLBundle = (function() {
       }
       return leaf;
     };
-    var parseKeys = function parseQueryStringKeys(givenKey, val, options, valuesParsed) {
-      if (!givenKey) {
-        return;
-      }
+    var splitKeyIntoSegments = function splitKeyIntoSegments2(givenKey, options) {
       var key = options.allowDots ? givenKey.replace(/\.([^.[]+)/g, "[$1]") : givenKey;
+      if (options.depth <= 0) {
+        if (!options.plainObjects && has.call(Object.prototype, key)) {
+          if (!options.allowPrototypes) {
+            return;
+          }
+        }
+        return [key];
+      }
       var brackets = /(\[[^[\]]*])/;
       var child = /(\[[^[\]]*])/g;
-      var segment = options.depth > 0 && brackets.exec(key);
+      var segment = brackets.exec(key);
       var parent = segment ? key.slice(0, segment.index) : key;
       var keys = [];
       if (parent) {
@@ -27744,23 +27839,34 @@ var AMLLBundle = (function() {
             return;
           }
         }
-        keys.push(parent);
+        keys[keys.length] = parent;
       }
       var i2 = 0;
-      while (options.depth > 0 && (segment = child.exec(key)) !== null && i2 < options.depth) {
+      while ((segment = child.exec(key)) !== null && i2 < options.depth) {
         i2 += 1;
-        if (!options.plainObjects && has.call(Object.prototype, segment[1].slice(1, -1))) {
+        var segmentContent = segment[1].slice(1, -1);
+        if (!options.plainObjects && has.call(Object.prototype, segmentContent)) {
           if (!options.allowPrototypes) {
             return;
           }
         }
-        keys.push(segment[1]);
+        keys[keys.length] = segment[1];
       }
       if (segment) {
         if (options.strictDepth === true) {
           throw new RangeError("Input depth exceeded depth option of " + options.depth + " and strictDepth is true");
         }
-        keys.push("[" + key.slice(segment.index) + "]");
+        keys[keys.length] = "[" + key.slice(segment.index) + "]";
+      }
+      return keys;
+    };
+    var parseKeys = function parseQueryStringKeys(givenKey, val, options, valuesParsed) {
+      if (!givenKey) {
+        return;
+      }
+      var keys = splitKeyIntoSegments(givenKey, options);
+      if (!keys) {
+        return;
       }
       return parseObject(keys, val, options, valuesParsed);
     };
@@ -27810,6 +27916,7 @@ var AMLLBundle = (function() {
         parseArrays: opts.parseArrays !== false,
         plainObjects: typeof opts.plainObjects === "boolean" ? opts.plainObjects : defaults.plainObjects,
         strictDepth: typeof opts.strictDepth === "boolean" ? !!opts.strictDepth : defaults.strictDepth,
+        strictMerge: typeof opts.strictMerge === "boolean" ? !!opts.strictMerge : defaults.strictMerge,
         strictNullHandling: typeof opts.strictNullHandling === "boolean" ? opts.strictNullHandling : defaults.strictNullHandling,
         throwOnLimitExceeded: typeof opts.throwOnLimitExceeded === "boolean" ? opts.throwOnLimitExceeded : false
       };
@@ -28424,19 +28531,19 @@ Deprecated since v${version}`), console.warn(stack))), warnings[message] = true;
       }
     })()), supported;
   }
-  var r = { grad: 0.9, turn: 360, rad: 360 / (2 * Math.PI) }, t$1 = function(r2) {
+  var r$1 = { grad: 0.9, turn: 360, rad: 360 / (2 * Math.PI) }, t$2 = function(r2) {
     return "string" == typeof r2 ? r2.length > 0 : "number" == typeof r2;
-  }, n$1 = function(r2, t2, n2) {
+  }, n$2 = function(r2, t2, n2) {
     return void 0 === t2 && (t2 = 0), void 0 === n2 && (n2 = Math.pow(10, t2)), Math.round(n2 * r2) / n2 + 0;
-  }, e = function(r2, t2, n2) {
+  }, e$1 = function(r2, t2, n2) {
     return void 0 === t2 && (t2 = 0), void 0 === n2 && (n2 = 1), r2 > n2 ? n2 : r2 > t2 ? r2 : t2;
   }, u$2 = function(r2) {
     return (r2 = isFinite(r2) ? r2 % 360 : 0) > 0 ? r2 : r2 + 360;
-  }, a = function(r2) {
-    return { r: e(r2.r, 0, 255), g: e(r2.g, 0, 255), b: e(r2.b, 0, 255), a: e(r2.a) };
-  }, o = function(r2) {
-    return { r: n$1(r2.r), g: n$1(r2.g), b: n$1(r2.b), a: n$1(r2.a, 3) };
-  }, i = /^#([0-9a-f]{3,8})$/i, s$1 = function(r2) {
+  }, a$1 = function(r2) {
+    return { r: e$1(r2.r, 0, 255), g: e$1(r2.g, 0, 255), b: e$1(r2.b, 0, 255), a: e$1(r2.a) };
+  }, o$1 = function(r2) {
+    return { r: n$2(r2.r), g: n$2(r2.g), b: n$2(r2.b), a: n$2(r2.a, 3) };
+  }, i$1 = /^#([0-9a-f]{3,8})$/i, s$2 = function(r2) {
     var t2 = r2.toString(16);
     return t2.length < 2 ? "0" + t2 : t2;
   }, h$1 = function(r2) {
@@ -28448,39 +28555,39 @@ Deprecated since v${version}`), console.warn(stack))), warnings[message] = true;
     var a2 = Math.floor(t2), o2 = e2 * (1 - n2), i2 = e2 * (1 - (t2 - a2) * n2), s2 = e2 * (1 - (1 - t2 + a2) * n2), h2 = a2 % 6;
     return { r: 255 * [e2, i2, o2, o2, s2, e2][h2], g: 255 * [s2, e2, e2, i2, o2, o2][h2], b: 255 * [o2, o2, s2, e2, e2, i2][h2], a: u2 };
   }, g$1 = function(r2) {
-    return { h: u$2(r2.h), s: e(r2.s, 0, 100), l: e(r2.l, 0, 100), a: e(r2.a) };
+    return { h: u$2(r2.h), s: e$1(r2.s, 0, 100), l: e$1(r2.l, 0, 100), a: e$1(r2.a) };
   }, d$2 = function(r2) {
-    return { h: n$1(r2.h), s: n$1(r2.s), l: n$1(r2.l), a: n$1(r2.a, 3) };
+    return { h: n$2(r2.h), s: n$2(r2.s), l: n$2(r2.l), a: n$2(r2.a, 3) };
   }, f$1 = function(r2) {
     return b$1((n2 = (t2 = r2).s, { h: t2.h, s: (n2 *= ((e2 = t2.l) < 50 ? e2 : 100 - e2) / 100) > 0 ? 2 * n2 / (e2 + n2) * 100 : 0, v: e2 + n2, a: t2.a }));
     var t2, n2, e2;
-  }, c$1 = function(r2) {
+  }, c$2 = function(r2) {
     return { h: (t2 = h$1(r2)).h, s: (u2 = (200 - (n2 = t2.s)) * (e2 = t2.v) / 100) > 0 && u2 < 200 ? n2 * e2 / 100 / (u2 <= 100 ? u2 : 200 - u2) * 100 : 0, l: u2 / 2, a: t2.a };
     var t2, n2, e2, u2;
-  }, l$1 = /^hsla?\(\s*([+-]?\d*\.?\d+)(deg|rad|grad|turn)?\s*,\s*([+-]?\d*\.?\d+)%\s*,\s*([+-]?\d*\.?\d+)%\s*(?:,\s*([+-]?\d*\.?\d+)(%)?\s*)?\)$/i, p$1 = /^hsla?\(\s*([+-]?\d*\.?\d+)(deg|rad|grad|turn)?\s+([+-]?\d*\.?\d+)%\s+([+-]?\d*\.?\d+)%\s*(?:\/\s*([+-]?\d*\.?\d+)(%)?\s*)?\)$/i, v$2 = /^rgba?\(\s*([+-]?\d*\.?\d+)(%)?\s*,\s*([+-]?\d*\.?\d+)(%)?\s*,\s*([+-]?\d*\.?\d+)(%)?\s*(?:,\s*([+-]?\d*\.?\d+)(%)?\s*)?\)$/i, m$1 = /^rgba?\(\s*([+-]?\d*\.?\d+)(%)?\s+([+-]?\d*\.?\d+)(%)?\s+([+-]?\d*\.?\d+)(%)?\s*(?:\/\s*([+-]?\d*\.?\d+)(%)?\s*)?\)$/i, y$1 = { string: [[function(r2) {
-    var t2 = i.exec(r2);
-    return t2 ? (r2 = t2[1]).length <= 4 ? { r: parseInt(r2[0] + r2[0], 16), g: parseInt(r2[1] + r2[1], 16), b: parseInt(r2[2] + r2[2], 16), a: 4 === r2.length ? n$1(parseInt(r2[3] + r2[3], 16) / 255, 2) : 1 } : 6 === r2.length || 8 === r2.length ? { r: parseInt(r2.substr(0, 2), 16), g: parseInt(r2.substr(2, 2), 16), b: parseInt(r2.substr(4, 2), 16), a: 8 === r2.length ? n$1(parseInt(r2.substr(6, 2), 16) / 255, 2) : 1 } : null : null;
+  }, l$2 = /^hsla?\(\s*([+-]?\d*\.?\d+)(deg|rad|grad|turn)?\s*,\s*([+-]?\d*\.?\d+)%\s*,\s*([+-]?\d*\.?\d+)%\s*(?:,\s*([+-]?\d*\.?\d+)(%)?\s*)?\)$/i, p$1 = /^hsla?\(\s*([+-]?\d*\.?\d+)(deg|rad|grad|turn)?\s+([+-]?\d*\.?\d+)%\s+([+-]?\d*\.?\d+)%\s*(?:\/\s*([+-]?\d*\.?\d+)(%)?\s*)?\)$/i, v$2 = /^rgba?\(\s*([+-]?\d*\.?\d+)(%)?\s*,\s*([+-]?\d*\.?\d+)(%)?\s*,\s*([+-]?\d*\.?\d+)(%)?\s*(?:,\s*([+-]?\d*\.?\d+)(%)?\s*)?\)$/i, m$1 = /^rgba?\(\s*([+-]?\d*\.?\d+)(%)?\s+([+-]?\d*\.?\d+)(%)?\s+([+-]?\d*\.?\d+)(%)?\s*(?:\/\s*([+-]?\d*\.?\d+)(%)?\s*)?\)$/i, y$1 = { string: [[function(r2) {
+    var t2 = i$1.exec(r2);
+    return t2 ? (r2 = t2[1]).length <= 4 ? { r: parseInt(r2[0] + r2[0], 16), g: parseInt(r2[1] + r2[1], 16), b: parseInt(r2[2] + r2[2], 16), a: 4 === r2.length ? n$2(parseInt(r2[3] + r2[3], 16) / 255, 2) : 1 } : 6 === r2.length || 8 === r2.length ? { r: parseInt(r2.substr(0, 2), 16), g: parseInt(r2.substr(2, 2), 16), b: parseInt(r2.substr(4, 2), 16), a: 8 === r2.length ? n$2(parseInt(r2.substr(6, 2), 16) / 255, 2) : 1 } : null : null;
   }, "hex"], [function(r2) {
     var t2 = v$2.exec(r2) || m$1.exec(r2);
-    return t2 ? t2[2] !== t2[4] || t2[4] !== t2[6] ? null : a({ r: Number(t2[1]) / (t2[2] ? 100 / 255 : 1), g: Number(t2[3]) / (t2[4] ? 100 / 255 : 1), b: Number(t2[5]) / (t2[6] ? 100 / 255 : 1), a: void 0 === t2[7] ? 1 : Number(t2[7]) / (t2[8] ? 100 : 1) }) : null;
+    return t2 ? t2[2] !== t2[4] || t2[4] !== t2[6] ? null : a$1({ r: Number(t2[1]) / (t2[2] ? 100 / 255 : 1), g: Number(t2[3]) / (t2[4] ? 100 / 255 : 1), b: Number(t2[5]) / (t2[6] ? 100 / 255 : 1), a: void 0 === t2[7] ? 1 : Number(t2[7]) / (t2[8] ? 100 : 1) }) : null;
   }, "rgb"], [function(t2) {
-    var n2 = l$1.exec(t2) || p$1.exec(t2);
+    var n2 = l$2.exec(t2) || p$1.exec(t2);
     if (!n2) return null;
-    var e2, u2, a2 = g$1({ h: (e2 = n2[1], u2 = n2[2], void 0 === u2 && (u2 = "deg"), Number(e2) * (r[u2] || 1)), s: Number(n2[3]), l: Number(n2[4]), a: void 0 === n2[5] ? 1 : Number(n2[5]) / (n2[6] ? 100 : 1) });
+    var e2, u2, a2 = g$1({ h: (e2 = n2[1], u2 = n2[2], void 0 === u2 && (u2 = "deg"), Number(e2) * (r$1[u2] || 1)), s: Number(n2[3]), l: Number(n2[4]), a: void 0 === n2[5] ? 1 : Number(n2[5]) / (n2[6] ? 100 : 1) });
     return f$1(a2);
   }, "hsl"]], object: [[function(r2) {
     var n2 = r2.r, e2 = r2.g, u2 = r2.b, o2 = r2.a, i2 = void 0 === o2 ? 1 : o2;
-    return t$1(n2) && t$1(e2) && t$1(u2) ? a({ r: Number(n2), g: Number(e2), b: Number(u2), a: Number(i2) }) : null;
+    return t$2(n2) && t$2(e2) && t$2(u2) ? a$1({ r: Number(n2), g: Number(e2), b: Number(u2), a: Number(i2) }) : null;
   }, "rgb"], [function(r2) {
     var n2 = r2.h, e2 = r2.s, u2 = r2.l, a2 = r2.a, o2 = void 0 === a2 ? 1 : a2;
-    if (!t$1(n2) || !t$1(e2) || !t$1(u2)) return null;
+    if (!t$2(n2) || !t$2(e2) || !t$2(u2)) return null;
     var i2 = g$1({ h: Number(n2), s: Number(e2), l: Number(u2), a: Number(o2) });
     return f$1(i2);
   }, "hsl"], [function(r2) {
     var n2 = r2.h, a2 = r2.s, o2 = r2.v, i2 = r2.a, s2 = void 0 === i2 ? 1 : i2;
-    if (!t$1(n2) || !t$1(a2) || !t$1(o2)) return null;
+    if (!t$2(n2) || !t$2(a2) || !t$2(o2)) return null;
     var h2 = (function(r3) {
-      return { h: u$2(r3.h), s: e(r3.s, 0, 100), v: e(r3.v, 0, 100), a: e(r3.a) };
+      return { h: u$2(r3.h), s: e$1(r3.s, 0, 100), v: e$1(r3.v, 0, 100), a: e$1(r3.a) };
     })({ h: Number(n2), s: Number(a2), v: Number(o2), a: Number(s2) });
     return b$1(h2);
   }, "hsv"]] }, N$2 = function(r2, t2) {
@@ -28492,13 +28599,13 @@ Deprecated since v${version}`), console.warn(stack))), warnings[message] = true;
   }, x$1 = function(r2) {
     return "string" == typeof r2 ? N$2(r2.trim(), y$1.string) : "object" == typeof r2 && null !== r2 ? N$2(r2, y$1.object) : [null, void 0];
   }, M$2 = function(r2, t2) {
-    var n2 = c$1(r2);
-    return { h: n2.h, s: e(n2.s + 100 * t2, 0, 100), l: n2.l, a: n2.a };
+    var n2 = c$2(r2);
+    return { h: n2.h, s: e$1(n2.s + 100 * t2, 0, 100), l: n2.l, a: n2.a };
   }, H$2 = function(r2) {
     return (299 * r2.r + 587 * r2.g + 114 * r2.b) / 1e3 / 255;
   }, $$2 = function(r2, t2) {
-    var n2 = c$1(r2);
-    return { h: n2.h, s: n2.s, l: e(n2.l + 100 * t2, 0, 100), a: n2.a };
+    var n2 = c$2(r2);
+    return { h: n2.h, s: n2.s, l: e$1(n2.l + 100 * t2, 0, 100), a: n2.a };
   }, j$2 = (function() {
     function r2(r3) {
       this.parsed = x$1(r3)[0], this.rgba = this.parsed || { r: 0, g: 0, b: 0, a: 1 };
@@ -28506,26 +28613,26 @@ Deprecated since v${version}`), console.warn(stack))), warnings[message] = true;
     return r2.prototype.isValid = function() {
       return null !== this.parsed;
     }, r2.prototype.brightness = function() {
-      return n$1(H$2(this.rgba), 2);
+      return n$2(H$2(this.rgba), 2);
     }, r2.prototype.isDark = function() {
       return H$2(this.rgba) < 0.5;
     }, r2.prototype.isLight = function() {
       return H$2(this.rgba) >= 0.5;
     }, r2.prototype.toHex = function() {
-      return r3 = o(this.rgba), t2 = r3.r, e2 = r3.g, u2 = r3.b, i2 = (a2 = r3.a) < 1 ? s$1(n$1(255 * a2)) : "", "#" + s$1(t2) + s$1(e2) + s$1(u2) + i2;
+      return r3 = o$1(this.rgba), t2 = r3.r, e2 = r3.g, u2 = r3.b, i2 = (a2 = r3.a) < 1 ? s$2(n$2(255 * a2)) : "", "#" + s$2(t2) + s$2(e2) + s$2(u2) + i2;
       var r3, t2, e2, u2, a2, i2;
     }, r2.prototype.toRgb = function() {
-      return o(this.rgba);
+      return o$1(this.rgba);
     }, r2.prototype.toRgbString = function() {
-      return r3 = o(this.rgba), t2 = r3.r, n2 = r3.g, e2 = r3.b, (u2 = r3.a) < 1 ? "rgba(" + t2 + ", " + n2 + ", " + e2 + ", " + u2 + ")" : "rgb(" + t2 + ", " + n2 + ", " + e2 + ")";
+      return r3 = o$1(this.rgba), t2 = r3.r, n2 = r3.g, e2 = r3.b, (u2 = r3.a) < 1 ? "rgba(" + t2 + ", " + n2 + ", " + e2 + ", " + u2 + ")" : "rgb(" + t2 + ", " + n2 + ", " + e2 + ")";
       var r3, t2, n2, e2, u2;
     }, r2.prototype.toHsl = function() {
-      return d$2(c$1(this.rgba));
+      return d$2(c$2(this.rgba));
     }, r2.prototype.toHslString = function() {
-      return r3 = d$2(c$1(this.rgba)), t2 = r3.h, n2 = r3.s, e2 = r3.l, (u2 = r3.a) < 1 ? "hsla(" + t2 + ", " + n2 + "%, " + e2 + "%, " + u2 + ")" : "hsl(" + t2 + ", " + n2 + "%, " + e2 + "%)";
+      return r3 = d$2(c$2(this.rgba)), t2 = r3.h, n2 = r3.s, e2 = r3.l, (u2 = r3.a) < 1 ? "hsla(" + t2 + ", " + n2 + "%, " + e2 + "%, " + u2 + ")" : "hsl(" + t2 + ", " + n2 + "%, " + e2 + "%)";
       var r3, t2, n2, e2, u2;
     }, r2.prototype.toHsv = function() {
-      return r3 = h$1(this.rgba), { h: n$1(r3.h), s: n$1(r3.s), v: n$1(r3.v), a: n$1(r3.a, 3) };
+      return r3 = h$1(this.rgba), { h: n$2(r3.h), s: n$2(r3.s), v: n$2(r3.v), a: n$2(r3.a, 3) };
       var r3;
     }, r2.prototype.invert = function() {
       return w$1({ r: 255 - (r3 = this.rgba).r, g: 255 - r3.g, b: 255 - r3.b, a: r3.a });
@@ -28543,11 +28650,11 @@ Deprecated since v${version}`), console.warn(stack))), warnings[message] = true;
     }, r2.prototype.rotate = function(r3) {
       return void 0 === r3 && (r3 = 15), this.hue(this.hue() + r3);
     }, r2.prototype.alpha = function(r3) {
-      return "number" == typeof r3 ? w$1({ r: (t2 = this.rgba).r, g: t2.g, b: t2.b, a: r3 }) : n$1(this.rgba.a, 3);
+      return "number" == typeof r3 ? w$1({ r: (t2 = this.rgba).r, g: t2.g, b: t2.b, a: r3 }) : n$2(this.rgba.a, 3);
       var t2;
     }, r2.prototype.hue = function(r3) {
-      var t2 = c$1(this.rgba);
-      return "number" == typeof r3 ? w$1({ h: r3, s: t2.s, l: t2.l, a: t2.a }) : n$1(t2.h);
+      var t2 = c$2(this.rgba);
+      return "number" == typeof r3 ? w$1({ h: r3, s: t2.s, l: t2.l, a: t2.a }) : n$2(t2.h);
     }, r2.prototype.isEqual = function(r3) {
       return this.toHex() === w$1(r3).toHex();
     }, r2;
@@ -38667,9 +38774,9 @@ void main()
     gl_FragColor = color;
 }
 `;
-  const n = class extends Filter {
+  const n$1 = class n extends Filter {
     constructor(e2) {
-      super(d$1, u$1), this.uniforms.dimensions = new Float32Array(2), Object.assign(this, n.defaults, e2);
+      super(d$1, u$1), this.uniforms.dimensions = new Float32Array(2), Object.assign(this, n$1.defaults, e2);
     }
     apply(e2, r2, o2, i2) {
       const { width: s2, height: a2 } = r2.filterFrame;
@@ -38694,8 +38801,8 @@ void main()
       this.uniforms.center = e2;
     }
   };
-  let t = n;
-  t.defaults = { center: [0.5, 0.5], radius: 100, strength: 1 };
+  let t$1 = n$1;
+  t$1.defaults = { center: [0.5, 0.5], radius: 100, strength: 1 };
   var fragment = `varying vec2 vTextureCoord;
 uniform sampler2D uSampler;
 uniform float m[20];
@@ -39656,8 +39763,8 @@ void main(void)
       this._texture !== value && (this._texture && this._texture.off("update", this._onTextureUpdate, this), this._texture = value || Texture.EMPTY, this._cachedTint = 16777215, this._textureID = -1, this._textureTrimmedID = -1, value && (value.baseTexture.valid ? this._onTextureUpdate() : value.once("update", this._onTextureUpdate, this)));
     }
   }
-  var s = class {
-  }, c = class extends s {
+  var s$1 = class s {
+  }, c$1 = class c extends s$1 {
     observer;
     flowSpeed = 1;
     currerntRenderScale = 0.75;
@@ -39683,7 +39790,7 @@ void main(void)
       return this.canvas;
     }
   };
-  var l = new Float32Array([
+  var l$1 = new Float32Array([
     1,
     0,
     0,
@@ -39732,7 +39839,7 @@ void main(void)
           ]) : super(t2, 0, 16);
           break;
         default:
-          super(l);
+          super(l$1);
           break;
       }
     }
@@ -39743,7 +39850,7 @@ void main(void)
       return this.set(e7), this;
     }
     identity() {
-      return this.set(l), this;
+      return this.set(l$1), this;
     }
     multiply(t2) {
       return e2.multiply(this, this, t2);
@@ -41480,7 +41587,7 @@ void main(void)
     let n2 = document.createElement("canvas");
     return n2.width = e7, n2.height = t2, n2;
   }
-  var de$1 = class de extends c {
+  var de$1 = class de extends c$1 {
     gl;
     lastFrameTime = 0;
     frameTime = 0;
@@ -41702,7 +41809,7 @@ void main(void)
     }
   }, fe$1 = class fe extends Container {
     time = 0;
-  }, pe$1 = class pe extends c {
+  }, pe$1 = class pe extends c$1 {
     app;
     curContainer;
     staticMode = false;
@@ -41737,19 +41844,19 @@ void main(void)
       let s2 = new ColorMatrixFilter();
       s2.contrast(0.3, true);
       for (let e8 of this.app.stage.filters ?? []) e8.destroy();
-      this.app.stage.filters = [], this.app.stage.filters.push(new BlurFilter(5, 1)), this.app.stage.filters.push(new BlurFilter(10, 1)), this.app.stage.filters.push(new BlurFilter(20, 2)), this.app.stage.filters.push(new BlurFilter(40, 2)), this.app.stage.filters.push(new BlurFilter(80, 2)), e7 > 768 && this.app.stage.filters.push(new BlurFilter(160, 4)), e7 > 768 * 2 && this.app.stage.filters.push(new BlurFilter(320, 4)), this.app.stage.filters.push(n2, o2, s2), this.app.stage.filters.push(new BlurFilter(5, 1)), Math.random() > 0.5 ? (this.app.stage.filters.push(new t({
+      this.app.stage.filters = [], this.app.stage.filters.push(new BlurFilter(5, 1)), this.app.stage.filters.push(new BlurFilter(10, 1)), this.app.stage.filters.push(new BlurFilter(20, 2)), this.app.stage.filters.push(new BlurFilter(40, 2)), this.app.stage.filters.push(new BlurFilter(80, 2)), e7 > 768 && this.app.stage.filters.push(new BlurFilter(160, 4)), e7 > 768 * 2 && this.app.stage.filters.push(new BlurFilter(320, 4)), this.app.stage.filters.push(n2, o2, s2), this.app.stage.filters.push(new BlurFilter(5, 1)), Math.random() > 0.5 ? (this.app.stage.filters.push(new t$1({
         radius: (t2 + e7) / 2,
         strength: 1,
         center: [0.25, 1]
-      })), this.app.stage.filters.push(new t({
+      })), this.app.stage.filters.push(new t$1({
         radius: (t2 + e7) / 2,
         strength: 1,
         center: [0.75, 0]
-      }))) : (this.app.stage.filters.push(new t({
+      }))) : (this.app.stage.filters.push(new t$1({
         radius: (t2 + e7) / 2,
         strength: 1,
         center: [0.75, 1]
-      })), this.app.stage.filters.push(new t({
+      })), this.app.stage.filters.push(new t$1({
         radius: (t2 + e7) / 2,
         strength: 1,
         center: [0.25, 0]
@@ -44908,7 +45015,7 @@ void main(void)
       );
     }
   };
-  const use = t$2.use || // A shim for older React versions
+  const use = t$3.use || // A shim for older React versions
   ((promise) => {
     if (promise.status === "pending") {
       throw promise;
@@ -44962,7 +45069,7 @@ void main(void)
     return continuablePromise;
   };
   function useAtomValue(atom2, options) {
-    const { delay, unstable_promiseStatus: promiseStatus = !t$2.use } = {};
+    const { delay, unstable_promiseStatus: promiseStatus = !t$3.use } = {};
     const store = useStore();
     const [[valueFromReducer, storeFromReducer, atomFromReducer], rerender] = reactExports.useReducer(
       (prev) => {
@@ -50763,7 +50870,7 @@ void main(void)
       l2,
       d2
     ]);
-    return t$2.createElement(n2, {
+    return t$3.createElement(n2, {
       ref: h2,
       ...f2
     }, e2);
@@ -51581,7 +51688,7 @@ void main(void)
     let e2 = useAtomValue(kh);
     return /* @__PURE__ */ jsxRuntimeExports.jsx(jsxRuntimeExports.Fragment, { children: reactExports.useMemo(() => Rp(e2 / 1e3), [e2]) });
   }, Wh = atom(null);
-  t$2.memo(() => {
+  t$3.memo(() => {
     let e2 = useAtomValue(kh), t2 = useAtomValue(jh), n2 = useAtomValue(Ah), r2 = useAtomValue(Fh), i2 = useAtomValue(gm).onEmit, a2 = useAtomValue(Sm).onEmit, o2 = useSetAtom(Wh), [s2, c2] = useAtom(ph), l2 = useAtomValue(Jm), u2 = useAtomValue(Ym), d2 = useAtomValue(Xm), f2 = reactExports.useMemo(() => ({
       fontFamily: l2 || void 0,
       fontWeight: u2 || void 0,
@@ -51631,6 +51738,253 @@ void main(void)
       ]
     })] });
   });
+  function e(e2) {
+    return e2.localName || e2.tagName.split(":").pop() || e2.tagName;
+  }
+  function t(e2, t2) {
+    let n2 = e2.getAttribute(t2);
+    if (n2 !== null) return n2;
+    for (let n3 of Array.from(e2.attributes)) if (n3.localName === t2 || n3.name === t2 || n3.name.endsWith(`:${t2}`)) return n3.value;
+    return null;
+  }
+  function n(e2) {
+    let t2 = e2.trim();
+    if (!t2) return 0;
+    if (t2.endsWith("s") && !t2.includes(":")) {
+      let e3 = Number(t2.slice(0, -1));
+      return Number.isFinite(e3) ? Math.round(e3 * 1e3) : 0;
+    }
+    let n2 = t2.split(":"), [r2, i2] = (n2[n2.length - 1] ?? "0").split("."), a2 = Number(r2 || "0"), o2 = i2 === void 0 ? 0 : Number(i2.padEnd(3, "0").slice(0, 3)), s2 = 0, c2 = 0;
+    return n2.length === 2 ? s2 = Number(n2[0] || "0") : n2.length >= 3 && (c2 = Number(n2[0] || "0"), s2 = Number(n2[1] || "0")), !Number.isFinite(a2) || !Number.isFinite(o2) || !Number.isFinite(s2) || !Number.isFinite(c2) ? 0 : ((c2 * 60 + s2) * 60 + a2) * 1e3 + o2;
+  }
+  function r(n2) {
+    let i2 = {
+      text: "",
+      begin: t(n2, "begin"),
+      end: t(n2, "end"),
+      role: t(n2, "role"),
+      lang: t(n2, "lang"),
+      emptyBeat: t(n2, "empty-beat"),
+      ruby: t(n2, "ruby"),
+      children: [],
+      tail: ""
+    }, a2 = null;
+    for (let t2 of Array.from(n2.childNodes)) if (t2.nodeType === Node.TEXT_NODE) {
+      let e2 = t2.textContent ?? "";
+      a2 ? a2.tail += e2 : i2.text += e2;
+    } else if (t2.nodeType === Node.ELEMENT_NODE) {
+      let n3 = t2;
+      if (e(n3) === "span") {
+        let e2 = r(n3);
+        i2.children.push(e2), a2 = e2;
+      }
+    }
+    return i2;
+  }
+  function i(e2, t2) {
+    let n2 = e2.role ? t2?.has(e2.role) : false, r2 = "";
+    if (!n2) {
+      r2 += e2.text || "";
+      for (let n3 of e2.children) r2 += i(n3, t2);
+    }
+    return r2 += e2.tail || "", r2;
+  }
+  function a(e2, t2) {
+    let n2 = e2.role ? t2?.has(e2.role) : false, r2 = "";
+    if (!n2) {
+      r2 += e2.text || "";
+      for (let n3 of e2.children) r2 += i(n3, t2);
+    }
+    return r2;
+  }
+  function o(e2) {
+    let t2 = [];
+    e2.ruby === "text" && t2.push(e2);
+    for (let n2 of e2.children) t2.push(...o(n2));
+    return t2;
+  }
+  function s(e2) {
+    let t2 = e2.filter((e3) => e3.word.trim().length > 0), n2 = t2.reduce((e3, t3) => Math.min(e3, t3.startTime), Infinity) ?? 0, r2 = t2.reduce((e3, t3) => Math.max(e3, t3.endTime), 0);
+    return [n2 === Infinity ? 0 : n2, r2];
+  }
+  function c(e2) {
+    let i2 = t(e2, "begin"), c2 = t(e2, "end"), l2 = r(e2), u2 = /* @__PURE__ */ new Set(["x-translation", "x-roman"]);
+    if (l2.ruby === "container") {
+      let r2 = a(l2.children.find((e3) => e3.ruby === "base") || l2, u2), d3 = o(l2), f3 = i2 ? n(i2) : null, p2 = c2 ? n(c2) : null, m2 = d3.map((e3) => {
+        let t2 = e3.begin ? n(e3.begin) : f3 ?? 0, r3 = e3.end ? n(e3.end) : p2 ?? 0;
+        return {
+          word: a(e3, u2),
+          startTime: t2,
+          endTime: r3
+        };
+      }), [h2, g2] = s(m2), _2 = {
+        word: r2,
+        startTime: f3 ?? h2,
+        endTime: p2 ?? g2,
+        obscene: false,
+        emptyBeat: 0,
+        romanWord: "",
+        ruby: m2.length > 0 ? m2 : void 0
+      }, v2 = t(e2, "empty-beat");
+      return v2 && (_2.emptyBeat = Number(v2)), t(e2, "obscene") === "true" && (_2.obscene = true), _2;
+    }
+    if (!i2 || !c2) return null;
+    let d2 = {
+      word: a(l2, u2),
+      startTime: n(i2),
+      endTime: n(c2),
+      obscene: false,
+      emptyBeat: 0,
+      romanWord: ""
+    }, f2 = t(e2, "empty-beat");
+    return f2 && (d2.emptyBeat = Number(f2)), t(e2, "obscene") === "true" && (d2.obscene = true), d2;
+  }
+  function l(e2) {
+    let t2 = new DOMParser().parseFromString(e2, "application/xml"), r2 = /* @__PURE__ */ new Map();
+    t2.querySelectorAll("iTunesMetadata > translations > translation > text[for]").forEach((e3) => {
+      let t3 = e3.getAttribute("for");
+      if (!t3) return;
+      let n2 = "", i3 = "";
+      for (let t4 of Array.from(e3.childNodes)) t4.nodeType === Node.TEXT_NODE ? n2 += t4.textContent ?? "" : t4.nodeType === Node.ELEMENT_NODE && t4.getAttribute("ttm:role") === "x-bg" && (i3 += t4.textContent ?? "");
+      n2 = n2.trim(), i3 = i3.trim().replace(/^[（(]/, "").replace(/[)）]$/, "").trim(), (n2.length > 0 || i3.length > 0) && r2.set(t3, {
+        main: n2,
+        bg: i3
+      });
+    });
+    let i2 = /* @__PURE__ */ new Map(), a2 = /* @__PURE__ */ new Map();
+    t2.querySelectorAll("iTunesMetadata > transliterations > transliteration > text[for]").forEach((e3) => {
+      let t3 = e3.getAttribute("for");
+      if (!t3) return;
+      let r3 = [], o3 = [], s3 = "", c2 = "", l3 = false;
+      for (let t4 of Array.from(e3.childNodes)) if (t4.nodeType === Node.TEXT_NODE) s3 += t4.textContent ?? "";
+      else if (t4.nodeType === Node.ELEMENT_NODE) {
+        let e4 = t4;
+        if (e4.getAttribute("ttm:role") === "x-bg") {
+          let t5 = e4.querySelectorAll("span[begin][end]");
+          t5.length > 0 ? (l3 = true, t5.forEach((e5) => {
+            let t6 = e5.textContent ?? "";
+            t6 = t6.trim().replace(/^[（(]/, "").replace(/[)）]$/, "").trim(), o3.push({
+              startTime: n(e5.getAttribute("begin") ?? ""),
+              endTime: n(e5.getAttribute("end") ?? ""),
+              text: t6
+            });
+          })) : c2 += e4.textContent ?? "";
+        } else e4.hasAttribute("begin") && e4.hasAttribute("end") && (l3 = true, r3.push({
+          startTime: n(e4.getAttribute("begin") ?? ""),
+          endTime: n(e4.getAttribute("end") ?? ""),
+          text: e4.textContent ?? ""
+        }));
+      }
+      l3 && a2.set(t3, {
+        main: r3,
+        bg: o3
+      }), s3 = s3.trim(), c2 = c2.trim().replace(/^[（(]/, "").replace(/[)）]$/, "").trim(), (s3.length > 0 || c2.length > 0) && i2.set(t3, {
+        main: s3,
+        bg: c2
+      });
+    });
+    let o2 = /* @__PURE__ */ new Map();
+    t2.querySelectorAll("iTunesMetadata > translations > translation > text[for]").forEach((e3) => {
+      let t3 = e3.getAttribute("for");
+      if (!t3) return;
+      let n2 = "", i3 = "";
+      for (let t4 of Array.from(e3.childNodes)) t4.nodeType === Node.TEXT_NODE ? n2 += t4.textContent ?? "" : t4.nodeType === Node.ELEMENT_NODE && t4.getAttribute("ttm:role") === "x-bg" && (i3 += t4.textContent ?? "");
+      n2 = n2.trim(), i3 = i3.trim().replace(/^[（(]/, "").replace(/[)）]$/, "").trim(), (n2.length > 0 || i3.length > 0) && e3.querySelector("span") && (o2.set(t3, {
+        main: n2,
+        bg: i3
+      }), r2.delete(t3));
+    });
+    let s2 = "v1", l2 = [];
+    for (let e3 of t2.querySelectorAll("meta")) if (e3.tagName === "amll:meta") {
+      let t3 = e3.getAttribute("key");
+      if (t3) {
+        let n2 = e3.getAttribute("value");
+        if (n2) {
+          let e4 = l2.find((e5) => e5.key === t3);
+          e4 ? e4.value.push(n2) : l2.push({
+            key: t3,
+            value: [n2]
+          });
+        }
+      }
+    }
+    let u2 = t2.querySelectorAll("iTunesMetadata > songwriters > songwriter");
+    if (u2.length > 0) {
+      let e3 = [];
+      u2.forEach((t3) => {
+        let n2 = t3.textContent?.trim();
+        n2 && e3.push(n2);
+      }), e3.length > 0 && l2.push({
+        key: "songwriter",
+        value: e3
+      });
+    }
+    for (let e3 of t2.querySelectorAll("ttm\\:agent")) if (e3.getAttribute("type") === "person") {
+      let t3 = e3.getAttribute("xml:id");
+      if (t3) {
+        s2 = t3;
+        break;
+      }
+    }
+    let d2 = [];
+    function f2(e3, t3 = false, l3 = false, u3 = null) {
+      let p2 = e3.getAttribute("begin"), m2 = e3.getAttribute("end"), h2 = 0, g2 = 0;
+      p2 && m2 && (h2 = n(p2), g2 = n(m2));
+      let _2 = {
+        words: [],
+        translatedLyric: "",
+        romanLyric: "",
+        isBG: t3,
+        isDuet: t3 ? l3 : !!e3.getAttribute("ttm:agent") && e3.getAttribute("ttm:agent") !== s2,
+        startTime: h2,
+        endTime: g2
+      }, v2 = false, y2 = t3 ? u3 : e3.getAttribute("itunes:key"), b2 = y2 ? a2.get(y2) : void 0, x2 = t3 ? b2?.bg : b2?.main, S2 = x2 ? [...x2] : [];
+      if (y2) {
+        let e4 = o2.get(y2), n2 = r2.get(y2);
+        t3 ? _2.translatedLyric = e4?.bg ?? n2?.bg ?? "" : _2.translatedLyric = e4?.main ?? n2?.main ?? "";
+        let a3 = i2.get(y2);
+        t3 ? _2.romanLyric = a3?.bg ?? "" : _2.romanLyric = a3?.main ?? "";
+      }
+      for (let t4 of e3.childNodes) if (t4.nodeType === Node.TEXT_NODE) {
+        let e4 = t4.textContent ?? "";
+        _2.words.push({
+          word: e4,
+          startTime: e4.trim().length > 0 ? _2.startTime : 0,
+          endTime: e4.trim().length > 0 ? _2.endTime : 0,
+          obscene: false,
+          emptyBeat: 0,
+          romanWord: ""
+        });
+      } else if (t4.nodeType === Node.ELEMENT_NODE) {
+        let e4 = t4, n2 = e4.getAttribute("ttm:role");
+        if (e4.nodeName === "span" && n2) n2 === "x-bg" ? (f2(e4, true, _2.isDuet, y2), v2 = true) : n2 === "x-translation" ? _2.translatedLyric ||= e4.innerHTML : n2 === "x-roman" && (_2.romanLyric ||= e4.innerHTML);
+        else {
+          let t5 = c(e4);
+          if (!t5) continue;
+          if (S2.length > 0) {
+            let e5 = S2.findIndex((e6) => e6.startTime === t5.startTime && e6.endTime === t5.endTime);
+            e5 !== -1 && (t5.romanWord = S2[e5].text, S2.splice(e5, 1));
+          }
+          _2.words.push(t5);
+        }
+      }
+      if ((!p2 || !m2) && (_2.startTime = _2.words.filter((e4) => e4.word.trim().length > 0).reduce((e4, t4) => Math.min(e4, t4.startTime), Infinity), _2.endTime = _2.words.filter((e4) => e4.word.trim().length > 0).reduce((e4, t4) => Math.max(e4, t4.endTime), 0)), _2.isBG) {
+        let e4 = _2.words[0];
+        e4 && /^[（(]/.test(e4.word) && (e4.word = e4.word.substring(1), e4.word.length === 0 && _2.words.shift());
+        let t4 = _2.words[_2.words.length - 1];
+        t4 && /[)）]$/.test(t4.word) && (t4.word = t4.word.substring(0, t4.word.length - 1), t4.word.length === 0 && _2.words.pop());
+      }
+      if (v2) {
+        let e4 = d2.pop();
+        d2.push(_2), e4 && d2.push(e4);
+      } else d2.push(_2);
+    }
+    for (let e3 of t2.querySelectorAll("body p[begin][end]")) f2(e3, false, false, null);
+    return {
+      metadata: l2,
+      lyricLines: d2
+    };
+  }
   const PLAYER_BACKGROUND = "transparent";
   const ACTIVE_LINE_ALIGN_ANCHOR = "top";
   const ACTIVE_LINE_ALIGN_POSITION = 0.3;
@@ -51721,6 +52075,38 @@ void main(void)
       };
     });
   }
+  function normalizeTtmlLyricLines(ttml) {
+    const parsed = l(ttml);
+    const rawLines = Array.isArray(parsed.lyricLines) ? parsed.lyricLines : Array.isArray(parsed.lines) ? parsed.lines : [];
+    const normalizedLines = rawLines.map((rawLine) => {
+      const line = rawLine ?? {};
+      const words = Array.isArray(line.words) ? line.words.map((word) => ({
+        word: String(word?.word ?? ""),
+        startTime: Number(word?.startTime ?? line.startTime ?? 0),
+        endTime: Number(word?.endTime ?? line.endTime ?? line.startTime ?? 0)
+      })) : [];
+      if (words.length === 0) {
+        words.push({
+          word: String(line.text ?? ""),
+          startTime: Number(line.startTime ?? 0),
+          endTime: Number(line.endTime ?? line.startTime ?? 0)
+        });
+      }
+      return {
+        words,
+        translatedLyric: String(line.translatedLyric ?? ""),
+        romanLyric: String(line.romanLyric ?? ""),
+        startTime: Number(line.startTime ?? 0),
+        endTime: Number(line.endTime ?? 0),
+        isBG: !!line.isBG,
+        isDuet: !!line.isDuet
+      };
+    });
+    return {
+      normalizedLines,
+      parsedKeys: Object.keys(parsed)
+    };
+  }
   function App() {
     const playerRef = reactExports.useRef(null);
     const currentTimeRef = reactExports.useRef(0);
@@ -51773,6 +52159,38 @@ void main(void)
           }
         } catch (error) {
           logToAndroid(`updateLyrics error: ${error.message}`, "error");
+        }
+      };
+      window.updateTtmlLyrics = function(ttml) {
+        try {
+          const ttmlText = String(ttml ?? "");
+          const { normalizedLines, parsedKeys } = normalizeTtmlLyricLines(ttmlText);
+          authorityTimeRef.current = currentTimeRef.current;
+          authorityAtRef.current = getMonotonicTime();
+          logToAndroid(`updateTtmlLyrics called, parsed ${normalizedLines.length} lines`, "debug");
+          if (ttmlText.trim().length > 0 && normalizedLines.length === 0) {
+            const ttmlPreview = ttmlText.slice(0, 160).replace(/\s+/g, " ").trim();
+            logToAndroid(
+              `TTML parse produced 0 lines. keys=[${parsedKeys.join(",")}], length=${ttmlText.length}, preview="${ttmlPreview}"`,
+              "warn"
+            );
+          }
+          normalizedLines.slice(0, 3).forEach((line, idx) => {
+            logToAndroid(
+              `TTML Line ${idx}: text="${line.words.map((w2) => w2.word).join("")}", words=${line.words.length}, startTime=${line.startTime}, endTime=${line.endTime}`,
+              "debug"
+            );
+          });
+          setLyricLines(normalizedLines);
+          logToAndroid(`Updated TTML lyrics (${normalizedLines.length} lines)`, "debug");
+          if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
+            playerRef.current.lyricPlayer.setCurrentTime(
+              Math.trunc(currentTimeRef.current),
+              isSeekingRef.current
+            );
+          }
+        } catch (error) {
+          logToAndroid(`updateTtmlLyrics error: ${error.message}`, "error");
         }
       };
       window.updateTime = function(timeMs) {
@@ -51868,6 +52286,7 @@ void main(void)
       }
       return () => {
         delete window.updateLyrics;
+        delete window.updateTtmlLyrics;
         delete window.updateTime;
         delete window.updateAlbumArt;
         delete window.setPaused;

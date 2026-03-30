@@ -74,6 +74,32 @@ interface LyricsPayload {
   }>
 }
 
+type ParsedTtmlLyric = ReturnType<typeof parseTTML>
+
+type LegacyTtmlLyricShape = ParsedTtmlLyric & {
+  lines?: ParsedTtmlLyric['lyricLines']
+}
+
+interface RawLyricLineLike {
+  words?: Array<{
+    word?: unknown
+    startTime?: unknown
+    endTime?: unknown
+  }>
+  text?: unknown
+  translatedLyric?: unknown
+  romanLyric?: unknown
+  startTime?: unknown
+  endTime?: unknown
+  isBG?: unknown
+  isDuet?: unknown
+}
+
+interface NormalizedTtmlResult {
+  normalizedLines: LyricLine[]
+  parsedKeys: string[]
+}
+
 type RenderMode = 'dom' | 'dom-lite'
 
 interface LyricMotionConfig {
@@ -208,37 +234,47 @@ function normalizeLyricLines(lines: any[]): LyricLine[] {
   })
 }
 
-function normalizeTtmlLyricLines(ttml: string): LyricLine[] {
-  const parsed = parseTTML(ttml) as any
-  const rawLines = Array.isArray(parsed?.lines) ? parsed.lines : []
+function normalizeTtmlLyricLines(ttml: string): NormalizedTtmlResult {
+  const parsed = parseTTML(ttml) as LegacyTtmlLyricShape
+  const rawLines = Array.isArray(parsed.lyricLines)
+    ? parsed.lyricLines
+    : Array.isArray(parsed.lines)
+      ? parsed.lines
+      : []
 
-  return rawLines.map((line: any) => {
-    const words = Array.isArray(line?.words)
-      ? line.words.map((word: any) => ({
+  const normalizedLines = rawLines.map((rawLine) => {
+    const line = (rawLine ?? {}) as RawLyricLineLike
+    const words = Array.isArray(line.words)
+      ? line.words.map((word) => ({
           word: String(word?.word ?? ''),
-          startTime: Number(word?.startTime ?? line?.startTime ?? 0),
-          endTime: Number(word?.endTime ?? line?.endTime ?? line?.startTime ?? 0),
+          startTime: Number(word?.startTime ?? line.startTime ?? 0),
+          endTime: Number(word?.endTime ?? line.endTime ?? line.startTime ?? 0),
         }))
       : []
 
     if (words.length === 0) {
       words.push({
-        word: String(line?.text ?? ''),
-        startTime: Number(line?.startTime ?? 0),
-        endTime: Number(line?.endTime ?? line?.startTime ?? 0),
+        word: String(line.text ?? ''),
+        startTime: Number(line.startTime ?? 0),
+        endTime: Number(line.endTime ?? line.startTime ?? 0),
       })
     }
 
     return {
       words,
-      translatedLyric: String(line?.translatedLyric ?? ''),
-      romanLyric: String(line?.romanLyric ?? ''),
-      startTime: Number(line?.startTime ?? 0),
-      endTime: Number(line?.endTime ?? 0),
-      isBG: !!line?.isBG,
-      isDuet: !!line?.isDuet,
+      translatedLyric: String(line.translatedLyric ?? ''),
+      romanLyric: String(line.romanLyric ?? ''),
+      startTime: Number(line.startTime ?? 0),
+      endTime: Number(line.endTime ?? 0),
+      isBG: !!line.isBG,
+      isDuet: !!line.isDuet,
     }
   })
+
+  return {
+    normalizedLines,
+    parsedKeys: Object.keys(parsed as unknown as Record<string, unknown>),
+  }
 }
 
 function App() {
@@ -314,11 +350,21 @@ function App() {
     window.updateTtmlLyrics = function (ttml: string) {
       try {
         const ttmlText = String(ttml ?? '')
-        const normalizedLines = normalizeTtmlLyricLines(ttmlText)
+        const { normalizedLines, parsedKeys } = normalizeTtmlLyricLines(ttmlText)
         authorityTimeRef.current = currentTimeRef.current
         authorityAtRef.current = getMonotonicTime()
 
         logToAndroid(`updateTtmlLyrics called, parsed ${normalizedLines.length} lines`, 'debug')
+        if (ttmlText.trim().length > 0 && normalizedLines.length === 0) {
+          const ttmlPreview = ttmlText
+            .slice(0, 160)
+            .replace(/\s+/g, ' ')
+            .trim()
+          logToAndroid(
+            `TTML parse produced 0 lines. keys=[${parsedKeys.join(',')}], length=${ttmlText.length}, preview="${ttmlPreview}"`,
+            'warn',
+          )
+        }
         normalizedLines.slice(0, 3).forEach((line, idx) => {
           logToAndroid(
             `TTML Line ${idx}: text="${line.words.map(w => w.word).join('')}", words=${line.words.length}, startTime=${line.startTime}, endTime=${line.endTime}`,
