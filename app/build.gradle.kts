@@ -1,6 +1,7 @@
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import org.gradle.api.GradleException
 import org.gradle.api.tasks.TaskAction
 import javax.inject.Inject
 import org.gradle.process.ExecOperations
@@ -9,6 +10,33 @@ import org.gradle.api.tasks.PathSensitive
 import org.gradle.api.tasks.InputDirectory
 import org.gradle.api.tasks.OutputDirectory
 import org.gradle.api.provider.Provider
+
+fun Project.getSigningValue(name: String): String? =
+    providers.gradleProperty(name).orNull ?: System.getenv(name)
+
+val releaseSigningValues = mapOf(
+    "RELEASE_STORE_FILE" to project.getSigningValue("RELEASE_STORE_FILE"),
+    "RELEASE_STORE_PASSWORD" to project.getSigningValue("RELEASE_STORE_PASSWORD"),
+    "RELEASE_KEY_ALIAS" to project.getSigningValue("RELEASE_KEY_ALIAS"),
+    "RELEASE_KEY_PASSWORD" to project.getSigningValue("RELEASE_KEY_PASSWORD")
+)
+val releaseSigningMissingKeys = releaseSigningValues
+    .filterValues { it.isNullOrBlank() }
+    .keys
+    .toList()
+val hasReleaseSigning = releaseSigningMissingKeys.isEmpty()
+
+val releaseSigningSetupHint = """
+Set the missing values in either:
+- ~/.gradle/gradle.properties
+- Environment variables
+
+Required keys:
+- RELEASE_STORE_FILE
+- RELEASE_STORE_PASSWORD
+- RELEASE_KEY_ALIAS
+- RELEASE_KEY_PASSWORD
+""".trimIndent()
 
 plugins {
     id("com.android.application")
@@ -103,6 +131,19 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
+    signingConfigs {
+        if (hasReleaseSigning) {
+            create("release") {
+                storeFile = rootProject.file(releaseSigningValues.getValue("RELEASE_STORE_FILE")!!)
+                storePassword = releaseSigningValues.getValue("RELEASE_STORE_PASSWORD")!!
+                keyAlias = releaseSigningValues.getValue("RELEASE_KEY_ALIAS")!!
+                keyPassword = releaseSigningValues.getValue("RELEASE_KEY_PASSWORD")!!
+                enableV1Signing = true
+                enableV2Signing = true
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
@@ -110,6 +151,9 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
         }
     }
     compileOptions {
@@ -124,6 +168,19 @@ android {
     lint {
         // 仅禁用 FullBackupContent，重新启用 NetworkSecurityConfig 以检查网络安全问题
         disable += listOf("FullBackupContent")
+    }
+}
+
+val releaseSigningValidationMessage =
+    "Missing release signing properties: ${releaseSigningMissingKeys.joinToString(", ")}\n$releaseSigningSetupHint"
+
+tasks.configureEach {
+    if (name == "preReleaseBuild" || name == "assembleRelease" || name == "bundleRelease" || name == "packageRelease") {
+        doFirst {
+            if (!hasReleaseSigning) {
+                throw GradleException(releaseSigningValidationMessage)
+            }
+        }
     }
 }
 

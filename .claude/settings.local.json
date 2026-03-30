@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//e/АMLL-DrоidMаtе/frontend/**)",
+      "Read(//e/АMLL-DrоidMаtе/**)",
+      "Bash(grep -E \"\\\\.\\(kt|xml\\)$\")",
+      "Bash(xargs -I {} basename {})"
+    ]
+  }
+}

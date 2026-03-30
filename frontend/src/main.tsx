@@ -1,7 +1,9 @@
-import React, { useEffect, useRef } from 'react'
+import React, { useEffect, useRef, useState } from 'react'
 import { createRoot } from 'react-dom/client'
 import { LyricPlayer, BackgroundRender } from '@applemusic-like-lyrics/react'
 import type { LyricPlayerRef } from '@applemusic-like-lyrics/react'
+import { DomSlimLyricPlayer } from '@applemusic-like-lyrics/core'
+import '@applemusic-like-lyrics/core/style.css'
 import '@applemusic-like-lyrics/react-full/style.css'
 import { useAtom, useSetAtom } from 'jotai'
 import {
@@ -45,6 +47,24 @@ interface LyricsPayload {
   }>
 }
 
+type RenderMode = 'dom' | 'dom-lite'
+
+interface LyricMotionConfig {
+  enableSpring: boolean
+  enableBlur: boolean
+  enableScale: boolean
+  hidePassedLines: boolean
+  wordFadeWidth: number
+}
+
+const DEFAULT_MOTION_CONFIG: LyricMotionConfig = {
+  enableSpring: true,
+  enableBlur: true,
+  enableScale: true,
+  hidePassedLines: false,
+  wordFadeWidth: 0.5,
+}
+
 let player: LyricPlayerRef | null = null
 let backgroundRender: any = null
 let lastAlbumArt = ''
@@ -56,15 +76,14 @@ interface AMLLGlobal {
   state: any
 }
 
-// 🔧 下游覆盖：修�?generateFadeGradient �?width 验证问题
-// �?AMLL 加载后立即应用补�?
+// Downstream override for AMLL mask variable initialization.
 function applyAMLLPatch() {
   logToAndroid('Applying AMLL patch for generateFadeGradient', 'info')
   
-  // 方法 1：通过 CSS 变量设置安全�?
+  // Ensure mask-related CSS variables always have safe defaults.
   const style = document.createElement('style')
   style.textContent = `
-    /* 确保 mask-image 相关 CSS 变量始终有安全默认�?*/
+    /* Keep mask-image CSS variables initialized. */
     :root {
       --bright-mask-alpha: 1.0;
       --dark-mask-alpha: 0.2;
@@ -89,6 +108,7 @@ declare global {
       log?: (message: string, level: string) => void
       isPlaying?: () => boolean
       onLineClick?: (index: number, startTime: number) => void
+      onFrontendReady?: () => void
     }
   }
 }
@@ -137,52 +157,23 @@ function normalizeLyricLines(lines: any[]): LyricLine[] {
 
 function App() {
   const playerRef = useRef<LyricPlayerRef>(null)
+  const currentTimeRef = useRef(0)
   const [lyricLines, setLyricLines] = useAtom(musicLyricLinesAtom)
   const [currentTime, setCurrentTime] = useAtom(musicPlayingPositionAtom)
   const [albumUri, setAlbumUri] = useAtom(musicCoverAtom)
   const [musicIsPlaying, setIsPlaying] = useAtom(musicPlayingAtom)
+  const [renderMode, setRenderModeState] = useState<RenderMode>('dom')
+  const [motionConfig, setMotionConfig] = useState(DEFAULT_MOTION_CONFIG)
   const setLowFreqVolume = useSetAtom(lowFreqVolumeAtom)
 
   // Initialize global state and Android bridge
   useEffect(() => {
-    // Connect global setters to Jotai atoms
-    if (globalSetLyricLines) {
-      globalSetLyricLines = setLyricLines
-    }
-    if (globalSetCurrentTime) {
-      globalSetCurrentTime = setCurrentTime
-    }
-    if (globalSetAlbumUri) {
-      globalSetAlbumUri = setAlbumUri
-    }
-    
     // Mount global references
     if (window.__amll) {
       window.__amll.player = playerRef.current
       window.__amll.backgroundRender = backgroundRender
     }
 
-    // 关键修复：在替换全局 setter 之前，先检查是否有延迟的数据需要处�?
-    const pendingLyrics = globalSetLyricLines
-    const pendingTime = globalSetCurrentTime
-    const pendingAlbum = globalSetAlbumUri
-    
-    // Expose global API for Android - 直接绑定�?Jotai �?setter
-    ;(window as any).__setLyricLines = setLyricLines
-    ;(window as any).__setCurrentTime = setCurrentTime
-    ;(window as any).__setAlbumUri = setAlbumUri
-
-    // 如果有延迟的数据，在替换 setter 后立即应�?
-    if (pendingLyrics && Array.isArray(pendingLyrics) && pendingLyrics.length > 0) {
-      setLyricLines(pendingLyrics)
-      logToAndroid(`Applied pending lyrics (${pendingLyrics.length} lines)`, 'info')
-    }
-    if (pendingTime !== null && typeof pendingTime === 'number') {
-      setCurrentTime(pendingTime)
-    }
-    if (pendingAlbum && typeof pendingAlbum === 'string') {
-      setAlbumUri(pendingAlbum)
-    }
 
     // Global API functions
     window.updateLyrics = function (payload: LyricsPayload) {
@@ -206,7 +197,7 @@ function App() {
             }
           ])
         } else {
-          // 调试：打印前几行歌词的详细信�?
+          // Log the first few lines to validate normalization.
           normalizedLines.slice(0, 3).forEach((line, idx) => {
             logToAndroid(`Line ${idx}: text="${line.words.map(w => w.word).join('')}", words=${line.words.length}, startTime=${line.startTime}, endTime=${line.endTime}`, 'debug')
             line.words.slice(0, 2).forEach((word, wIdx) => {
@@ -219,19 +210,16 @@ function App() {
         
         logToAndroid(`Updated lyrics (${normalizedLines.length} lines)`, 'debug')
         
-        // 关键修复：在设置歌词后，如果当前已经有时间值，强制 LyricPlayer 立即更新进度
-        // 这是因为 Android �?updateTime 可能�?updateLyrics 之前通过 evaluateJavascript 异步发�?
-        // 导致 initialLayoutFinished 检查失败而被跳过
-        if (playerRef.current?.lyricPlayer && currentTime > 0) {
-          logToAndroid(`Force update LyricPlayer time to ${currentTime} after setting lyrics`, 'info')
-          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTime), false)
+        // Re-apply current time after lyrics land so the player can snap to the active line.
+        if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
+          logToAndroid(`Force update LyricPlayer time to ${currentTimeRef.current} after setting lyrics`, 'info')
+          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTimeRef.current), false)
               
-          // 额外修复：触发一�?mask-image 更新，确�?CSS 变量正确初始�?
-          // 这是因为 AMLL �?mask-image 生成依赖于布局测量，可能在初始渲染时未完成
+          // Trigger one extra layout tick so mask-based word highlighting recalculates.
           setTimeout(() => {
             if (playerRef.current?.lyricPlayer) {
               logToAndroid('Triggering mask-image recalculation', 'debug')
-              playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTime), true)
+              playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTimeRef.current), true)
             }
           }, 100)
         }
@@ -242,10 +230,9 @@ function App() {
 
     window.updateTime = function (timeMs: number) {
       const parsedTime = Number(timeMs)
-      if (typeof (window as any).__setCurrentTime === 'function') {
-        ;(window as any).__setCurrentTime(parsedTime)
-      }
-      // playerRef.current.lyricPlayer 才是真正的歌词播放实�?
+      currentTimeRef.current = parsedTime
+      setCurrentTime(parsedTime)
+      // Keep the core player in sync immediately, not just through React state.
       if (playerRef.current?.lyricPlayer) {
         playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), false)
       }
@@ -273,7 +260,15 @@ function App() {
 
     window.configureLyricMotion = function (options: any) {
       logToAndroid(`configureLyricMotion: ${JSON.stringify(options)}`, 'debug')
-      // AMLL Core handles motion configuration internally
+      setMotionConfig((prev) => ({
+        enableSpring: typeof options?.enableSpring === 'boolean' ? options.enableSpring : prev.enableSpring,
+        enableBlur: typeof options?.enableBlur === 'boolean' ? options.enableBlur : prev.enableBlur,
+        enableScale: typeof options?.enableScale === 'boolean' ? options.enableScale : prev.enableScale,
+        hidePassedLines: typeof options?.hidePassedLines === 'boolean' ? options.hidePassedLines : prev.hidePassedLines,
+        wordFadeWidth: Number.isFinite(Number(options?.wordFadeWidth))
+          ? Number(options.wordFadeWidth)
+          : prev.wordFadeWidth,
+      }))
     }
 
     window.configureBackgroundEffect = function (options: any) {
@@ -291,15 +286,32 @@ function App() {
 
     window.setRenderMode = function (mode: string) {
       logToAndroid(`setRenderMode: ${mode}`, 'debug')
-      // Render mode is handled by AMLL Core
+      setRenderModeState(mode === 'dom-lite' ? 'dom-lite' : 'dom')
+    }
+
+    if (window.Android?.onFrontendReady) {
+      try {
+        window.Android.onFrontendReady()
+        logToAndroid('Frontend bridge ready', 'info')
+      } catch (error) {
+        logToAndroid(`Failed to notify frontend ready: ${(error as Error).message}`, 'warn')
+      }
     }
 
     return () => {
-      delete (window as any).__setLyricLines
-      delete (window as any).__setCurrentTime
-      delete (window as any).__setAlbumUri
+      delete window.updateLyrics
+      delete window.updateTime
+      delete window.updateAlbumArt
+      delete window.setPaused
+      delete window.configureLyricMotion
+      delete window.configureBackgroundEffect
+      delete window.setRenderMode
     }
   }, [setLyricLines, setCurrentTime, setAlbumUri, setIsPlaying, setLowFreqVolume])
+
+  useEffect(() => {
+    currentTimeRef.current = currentTime
+  }, [currentTime])
 
   // Sync playing state with Android
   useEffect(() => {
@@ -345,14 +357,16 @@ function App() {
 
       <LyricPlayer
         ref={playerRef}
+        lyricPlayer={renderMode === 'dom-lite' ? DomSlimLyricPlayer : undefined}
         lyricLines={lyricLines}
         currentTime={currentTime}
         playing={musicIsPlaying}
         disabled={false}
-        enableSpring={true}
-        enableBlur={true}
-        enableScale={true}
-        wordFadeWidth={0.5}
+        enableSpring={motionConfig.enableSpring}
+        enableBlur={motionConfig.enableBlur}
+        enableScale={motionConfig.enableScale}
+        hidePassedLines={motionConfig.hidePassedLines}
+        wordFadeWidth={motionConfig.wordFadeWidth}
         alignAnchor="center"
         alignPosition={0.5}
         linePosYSpringParams={{ mass: 0.9, damping: 15, stiffness: 90 }}
@@ -371,29 +385,13 @@ function App() {
   )
 }
 
-// Initialize app
-let globalSetLyricLines: any = null
-let globalSetCurrentTime: any = null
-let globalSetAlbumUri: any = null
-
 if (typeof window !== 'undefined') {
-  // 立即挂载全局 API，确�?Android 能随时调�?
-  ;(window as any).__setLyricLines = (lines: any[]) => {
-    globalSetLyricLines = lines
-  }
-  ;(window as any).__setCurrentTime = (time: number) => {
-    globalSetCurrentTime = time
-  }
-  ;(window as any).__setAlbumUri = (uri: string) => {
-    globalSetAlbumUri = uri
-  }
-  
   window.addEventListener('DOMContentLoaded', () => {
     try {
       document.documentElement.style.background = 'transparent'
       document.body.style.background = 'transparent'
       
-      // 🔧 应用下游补丁
+      // Apply local AMLL compatibility patch.
       applyAMLLPatch()
       
       const root = document.getElementById('app') || document.createElement('div')
@@ -401,11 +399,11 @@ if (typeof window !== 'undefined') {
         root.id = 'app'
         document.body?.appendChild(root)
       }
-      
+
       if (root) {
         createRoot(root).render(<App />)
       }
-      
+
       logToAndroid('AMLL WebView initialized', 'info')
     } catch (error) {
       logToAndroid(`Initialization error: ${(error as Error).message}`, 'error')

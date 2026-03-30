@@ -51633,12 +51633,19 @@ void main(void)
   });
   const PLAYER_BACKGROUND = "transparent";
   const demoAlbumArt = "data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAwIiBoZWlnaHQ9IjQwMCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48cmVjdCB3aWR0aD0iMTAwJSIgaGVpZ2h0PSIxMDAlIiBmaWxsPSJyZ2JhKDAsMCwwLDAuMSkiLz48L3N2Zz4=";
+  const DEFAULT_MOTION_CONFIG = {
+    enableSpring: true,
+    enableBlur: true,
+    enableScale: true,
+    hidePassedLines: false,
+    wordFadeWidth: 0.5
+  };
   let backgroundRender = null;
   function applyAMLLPatch() {
     logToAndroid("Applying AMLL patch for generateFadeGradient", "info");
     const style = document.createElement("style");
     style.textContent = `
-    /* 确保 mask-image 相关 CSS 变量始终有安全默认�?*/
+    /* Keep mask-image CSS variables initialized. */
     :root {
       --bright-mask-alpha: 1.0;
       --dark-mask-alpha: 0.2;
@@ -51686,40 +51693,18 @@ void main(void)
   }
   function App() {
     const playerRef = reactExports.useRef(null);
+    const currentTimeRef = reactExports.useRef(0);
     const [lyricLines, setLyricLines] = useAtom(Nh);
     const [currentTime, setCurrentTime] = useAtom(jh);
     const [albumUri, setAlbumUri] = useAtom(Dh);
     const [musicIsPlaying, setIsPlaying] = useAtom(Ah);
+    const [renderMode, setRenderModeState] = reactExports.useState("dom");
+    const [motionConfig, setMotionConfig] = reactExports.useState(DEFAULT_MOTION_CONFIG);
     const setLowFreqVolume = useSetAtom(zh);
     reactExports.useEffect(() => {
-      if (globalSetLyricLines) {
-        globalSetLyricLines = setLyricLines;
-      }
-      if (globalSetCurrentTime) {
-        globalSetCurrentTime = setCurrentTime;
-      }
-      if (globalSetAlbumUri) {
-        globalSetAlbumUri = setAlbumUri;
-      }
       if (window.__amll) {
         window.__amll.player = playerRef.current;
         window.__amll.backgroundRender = backgroundRender;
-      }
-      const pendingLyrics = globalSetLyricLines;
-      const pendingTime = globalSetCurrentTime;
-      const pendingAlbum = globalSetAlbumUri;
-      window.__setLyricLines = setLyricLines;
-      window.__setCurrentTime = setCurrentTime;
-      window.__setAlbumUri = setAlbumUri;
-      if (pendingLyrics && Array.isArray(pendingLyrics) && pendingLyrics.length > 0) {
-        setLyricLines(pendingLyrics);
-        logToAndroid(`Applied pending lyrics (${pendingLyrics.length} lines)`, "info");
-      }
-      if (pendingTime !== null && typeof pendingTime === "number") {
-        setCurrentTime(pendingTime);
-      }
-      if (pendingAlbum && typeof pendingAlbum === "string") {
-        setAlbumUri(pendingAlbum);
       }
       window.updateLyrics = function(payload) {
         try {
@@ -51748,13 +51733,13 @@ void main(void)
             setLyricLines(normalizedLines);
           }
           logToAndroid(`Updated lyrics (${normalizedLines.length} lines)`, "debug");
-          if (playerRef.current?.lyricPlayer && currentTime > 0) {
-            logToAndroid(`Force update LyricPlayer time to ${currentTime} after setting lyrics`, "info");
-            playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTime), false);
+          if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
+            logToAndroid(`Force update LyricPlayer time to ${currentTimeRef.current} after setting lyrics`, "info");
+            playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTimeRef.current), false);
             setTimeout(() => {
               if (playerRef.current?.lyricPlayer) {
                 logToAndroid("Triggering mask-image recalculation", "debug");
-                playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTime), true);
+                playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTimeRef.current), true);
               }
             }, 100);
           }
@@ -51764,9 +51749,8 @@ void main(void)
       };
       window.updateTime = function(timeMs) {
         const parsedTime = Number(timeMs);
-        if (typeof window.__setCurrentTime === "function") {
-          window.__setCurrentTime(parsedTime);
-        }
+        currentTimeRef.current = parsedTime;
+        setCurrentTime(parsedTime);
         if (playerRef.current?.lyricPlayer) {
           playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), false);
         }
@@ -51788,6 +51772,13 @@ void main(void)
       };
       window.configureLyricMotion = function(options) {
         logToAndroid(`configureLyricMotion: ${JSON.stringify(options)}`, "debug");
+        setMotionConfig((prev) => ({
+          enableSpring: typeof options?.enableSpring === "boolean" ? options.enableSpring : prev.enableSpring,
+          enableBlur: typeof options?.enableBlur === "boolean" ? options.enableBlur : prev.enableBlur,
+          enableScale: typeof options?.enableScale === "boolean" ? options.enableScale : prev.enableScale,
+          hidePassedLines: typeof options?.hidePassedLines === "boolean" ? options.hidePassedLines : prev.hidePassedLines,
+          wordFadeWidth: Number.isFinite(Number(options?.wordFadeWidth)) ? Number(options.wordFadeWidth) : prev.wordFadeWidth
+        }));
       };
       window.configureBackgroundEffect = function(options) {
         logToAndroid(`configureBackgroundEffect: ${JSON.stringify(options)}`, "debug");
@@ -51803,13 +51794,29 @@ void main(void)
       };
       window.setRenderMode = function(mode) {
         logToAndroid(`setRenderMode: ${mode}`, "debug");
+        setRenderModeState(mode === "dom-lite" ? "dom-lite" : "dom");
       };
+      if (window.Android?.onFrontendReady) {
+        try {
+          window.Android.onFrontendReady();
+          logToAndroid("Frontend bridge ready", "info");
+        } catch (error) {
+          logToAndroid(`Failed to notify frontend ready: ${error.message}`, "warn");
+        }
+      }
       return () => {
-        delete window.__setLyricLines;
-        delete window.__setCurrentTime;
-        delete window.__setAlbumUri;
+        delete window.updateLyrics;
+        delete window.updateTime;
+        delete window.updateAlbumArt;
+        delete window.setPaused;
+        delete window.configureLyricMotion;
+        delete window.configureBackgroundEffect;
+        delete window.setRenderMode;
       };
     }, [setLyricLines, setCurrentTime, setAlbumUri, setIsPlaying, setLowFreqVolume]);
+    reactExports.useEffect(() => {
+      currentTimeRef.current = currentTime;
+    }, [currentTime]);
     reactExports.useEffect(() => {
       if (window.Android?.isPlaying) {
         try {
@@ -51852,14 +51859,16 @@ void main(void)
         v,
         {
           ref: playerRef,
+          lyricPlayer: renderMode === "dom-lite" ? Mt$1 : void 0,
           lyricLines,
           currentTime,
           playing: musicIsPlaying,
           disabled: false,
-          enableSpring: true,
-          enableBlur: true,
-          enableScale: true,
-          wordFadeWidth: 0.5,
+          enableSpring: motionConfig.enableSpring,
+          enableBlur: motionConfig.enableBlur,
+          enableScale: motionConfig.enableScale,
+          hidePassedLines: motionConfig.hidePassedLines,
+          wordFadeWidth: motionConfig.wordFadeWidth,
           alignAnchor: "center",
           alignPosition: 0.5,
           linePosYSpringParams: { mass: 0.9, damping: 15, stiffness: 90 },
@@ -51877,19 +51886,7 @@ void main(void)
       )
     ] });
   }
-  let globalSetLyricLines = null;
-  let globalSetCurrentTime = null;
-  let globalSetAlbumUri = null;
   if (typeof window !== "undefined") {
-    window.__setLyricLines = (lines) => {
-      globalSetLyricLines = lines;
-    };
-    window.__setCurrentTime = (time) => {
-      globalSetCurrentTime = time;
-    };
-    window.__setAlbumUri = (uri2) => {
-      globalSetAlbumUri = uri2;
-    };
     window.addEventListener("DOMContentLoaded", () => {
       try {
         document.documentElement.style.background = "transparent";

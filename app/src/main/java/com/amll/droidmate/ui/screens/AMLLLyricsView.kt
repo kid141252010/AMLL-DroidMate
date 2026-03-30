@@ -196,6 +196,7 @@ fun AMLLLyricsView(
     val onLineSeekState = rememberUpdatedState(onLineSeek)
     val isPlayingState = rememberUpdatedState(isPlaying)
     var isPageReady by remember { mutableStateOf(false) }
+    var isBridgeReady by remember { mutableStateOf(false) }
     var lastModeValue by remember { mutableStateOf<String?>(null) }
     var lastBackgroundProfileValue by remember { mutableStateOf<String?>(null) }
     var lastLyrics by remember { mutableStateOf<TTMLLyrics?>(null) }
@@ -335,6 +336,7 @@ fun AMLLLyricsView(
                 webViewClient = object : WebViewClient() {
                     override fun onPageStarted(view: WebView, url: String, favicon: android.graphics.Bitmap?) {
                         isPageReady = false
+                        isBridgeReady = false
                         lastModeValue = null
                         lastBackgroundProfileValue = null
                         lastLyrics = null
@@ -352,7 +354,7 @@ fun AMLLLyricsView(
                         // 页面刷新结束时不主动清空 lastLyrics，让我们知道是否还有有效歌词
                         // lastLyrics = null
                         // 页面刷新完成后如果我们之前有歌词 JSON 且当前仍然有 lyrics（不是因歌曲切换而清空），先立刻重新下发
-                        if (lastLyricsPayload != null && lastLyrics != null) {
+                        if (isBridgeReady && lastLyricsPayload != null && lastLyrics != null) {
                             Timber.d("[AMLLLyrics] [$debugSource#$instanceId] reapplying lyrics payload after page finish")
                             view.evaluateJavascript("window.updateLyrics && window.updateLyrics($lastLyricsPayload);", null)
                         }
@@ -440,7 +442,15 @@ fun AMLLLyricsView(
                                 )
                             }
                         },
-                        isPlayingProvider = { isPlayingState.value }
+                        isPlayingProvider = { isPlayingState.value },
+                        onFrontendReady = {
+                            webViewRef.post {
+                                if (!isBridgeReady) {
+                                    isBridgeReady = true
+                                    Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Frontend bridge reported ready")
+                                }
+                            }
+                        }
                     ),
                     "Android"
                 )
@@ -463,6 +473,10 @@ fun AMLLLyricsView(
         update = { view ->
             if (!isPageReady) {
                 Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Bridge skipped: page not ready")
+                return@AndroidView
+            }
+            if (!isBridgeReady) {
+                Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Bridge skipped: frontend bridge not ready")
                 return@AndroidView
             }
 
@@ -778,7 +792,8 @@ class AMLLInterface(
     private val onLineSeek: ((Long) -> Unit)? = null,
     private val webSocketClient: com.amll.droidmate.websocket.AMLLWebSocketClient? = null, // WebSocket 客户端引用
     private val onSeekRequested: ((Long) -> Unit)? = null,
-    private val isPlayingProvider: () -> Boolean = { true }
+    private val isPlayingProvider: () -> Boolean = { true },
+    private val onFrontendReady: (() -> Unit)? = null
 ) {
     @JavascriptInterface
     fun log(message: String, level: String = "debug") {
@@ -802,6 +817,12 @@ class AMLLInterface(
     @JavascriptInterface
     fun isPlaying(): Boolean {
         return isPlayingProvider()
+    }
+
+    @JavascriptInterface
+    fun onFrontendReady() {
+        Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Frontend ready callback received")
+        onFrontendReady?.invoke()
     }
     
     @JavascriptInterface
