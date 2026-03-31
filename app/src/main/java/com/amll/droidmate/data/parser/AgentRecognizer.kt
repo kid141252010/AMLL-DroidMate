@@ -61,12 +61,11 @@ object AgentRecognizer {
         // if multiple agents exist, mark duet lines
         val uniqueAgents = annotated.mapNotNull { it.agent }.distinct()
         if (uniqueAgents.size > 1) {
+            val primaryAgent = uniqueAgents.first()
             return annotated.map { line ->
-                if (!line.agent.isNullOrBlank()) {
-                    line.copy(isDuet = true)
-                } else {
-                    line
-                }
+                val agent = line.agent
+                if (agent.isNullOrBlank()) return@map line
+                line.copy(isDuet = line.isDuet || agent != primaryAgent)
             }
         }
 

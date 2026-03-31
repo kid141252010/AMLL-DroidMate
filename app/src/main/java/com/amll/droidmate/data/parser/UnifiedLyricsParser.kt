@@ -139,7 +139,10 @@ object UnifiedLyricsParser {
             }
 
             // 识别演唱者标记（A: XX），用于填充 agent/isDuet 信息
-            val annotatedLines = if (processMetadata) {
+            val shouldRecognizeAgents =
+                processMetadata &&
+                    !(format == LyricsFormat.TTML && cleanedLines.any { !it.agent.isNullOrBlank() || it.isDuet })
+            val annotatedLines = if (shouldRecognizeAgents) {
                 AgentRecognizer.recognizeAgents(cleanedLines)
             } else {
                 cleanedLines

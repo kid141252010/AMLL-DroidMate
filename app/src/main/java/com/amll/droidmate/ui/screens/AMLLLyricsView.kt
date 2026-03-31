@@ -412,7 +412,7 @@ private fun buildPlaybackSyncPayload(
 }
 
 private fun emptyLyricsPayload(): String {
-    return """{"metadata":{"title":"","artist":""},"lines":[]}"""
+    return """{"metadata":{"title":"","artist":""},"lines":[],"songParts":[]}"""
 }
 
 private data class FontWebEntry(
@@ -543,8 +543,15 @@ private fun buildLyricsJson(lyrics: TTMLLyrics): String {
 
     val title = lyrics.metadata.title.replace("\\", "\\\\").replace("\"", "\\\"")
     val artist = lyrics.metadata.artist.replace("\\", "\\\\").replace("\"", "\\\"")
+    val songPartsJson = lyrics.songParts.joinToString(",") { part ->
+        val name = part.name
+            .replace("\\", "\\\\")
+            .replace("\"", "\\\"")
+            .replace("\n", "\\n")
+        """{"name":"$name","startTime":${part.startTime},"endTime":${part.endTime}}"""
+    }
 
-    return """{"metadata":{"title":"$title","artist":"$artist"},"lines":[$linesJson]}"""
+    return """{"metadata":{"title":"$title","artist":"$artist"},"lines":[$linesJson],"songParts":[$songPartsJson]}"""
 }
 
 class AMLLInterface(
@@ -562,6 +569,13 @@ class AMLLInterface(
     @JavascriptInterface
     fun onLineClick(lineIndex: Int, startTime: Long) {
         amllInfo("[$debugSource#$instanceId] User clicked lyric line: index=$lineIndex, startTime=$startTime, callbackPresent=${onLineSeek != null}")
+        onSeekRequested?.invoke(startTime)
+        onLineSeek?.invoke(startTime)
+    }
+
+    @JavascriptInterface
+    fun onSongPartClick(startTime: Long) {
+        amllInfo("[$debugSource#$instanceId] User clicked song part: startTime=$startTime")
         onSeekRequested?.invoke(startTime)
         onLineSeek?.invoke(startTime)
     }

@@ -5,8 +5,14 @@ import '@applemusic-like-lyrics/core/style.css'
 const PLAYER_BACKGROUND = 'transparent'
 const SEEK_THRESHOLD_MS = 900
 const SEEK_HOLD_MS = 180
+const MANUAL_SEEK_GUARD_MS = 1200
+const MANUAL_SEEK_TOLERANCE_MS = 350
 const DEFAULT_FONT_STACK = '"SF Pro Display", "PingFang SC", system-ui, -apple-system, "Segoe UI", sans-serif'
 const DYNAMIC_FONT_STYLE_ID = 'amll-dynamic-font-face-style'
+const SONG_PART_STYLE_ID = 'amll-song-part-style'
+const SONG_PART_STRIP_ID = 'amll-song-part-strip'
+const SONG_PART_CHIP_CLASS = 'amll-song-part-chip'
+const SONG_PART_CHIP_ACTIVE_CLASS = 'is-active'
 
 const QUALITY_PROFILE = {
   alignAnchor: 'top',
@@ -54,6 +60,7 @@ const PLAYING_CLASS = 'playing'
 // --- shared state & globals (moved to top to avoid TDZ errors) ---
 let state = {
   lyricLines: [],
+  songParts: [],
   currentTime: 0,
   isSeeking: false,
   blur: {
@@ -93,6 +100,199 @@ function ensureUnblurStyle() {
   pointer-events: none !important;
 }`
   document.head.appendChild(s)
+}
+
+function ensureSongPartStyle() {
+  if (document.getElementById(SONG_PART_STYLE_ID)) return
+  const styleNode = document.createElement('style')
+  styleNode.id = SONG_PART_STYLE_ID
+  styleNode.textContent = `
+#${SONG_PART_STRIP_ID} {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  white-space: nowrap;
+  padding: 8px 10px;
+  border-radius: 14px;
+  background: rgba(12, 12, 12, 0.36);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+}
+
+#${SONG_PART_STRIP_ID}.hidden {
+  display: none;
+}
+
+#${SONG_PART_STRIP_ID} .${SONG_PART_CHIP_CLASS} {
+  pointer-events: auto;
+  border: 0;
+  border-radius: 12px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.16);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+#${SONG_PART_STRIP_ID} .${SONG_PART_CHIP_CLASS} .chip-time {
+  font-size: 10px;
+  font-weight: 400;
+  opacity: 0.7;
+}
+
+#${SONG_PART_STRIP_ID} .${SONG_PART_CHIP_CLASS}.${SONG_PART_CHIP_ACTIVE_CLASS} {
+  background: rgba(255, 255, 255, 0.9);
+  color: #121212;
+}
+`
+  document.head.appendChild(styleNode)
+}
+
+function normalizeSongParts(rawSongParts) {
+  if (!Array.isArray(rawSongParts)) return []
+  return rawSongParts
+    .map((part, index) => {
+      const name = String(part?.name ?? '').trim()
+      const startTime = Math.max(0, Math.trunc(Number(part?.startTime ?? 0)))
+      const endTime = Math.max(startTime, Math.trunc(Number(part?.endTime ?? startTime)))
+      return {
+        name,
+        startTime,
+        endTime,
+        _key: `${startTime}-${endTime}-${index}`,
+      }
+    })
+    .filter((part) => part.name.length > 0 && part.endTime > part.startTime)
+}
+
+function formatSongPartTime(ms) {
+  const totalSec = Math.floor(Math.max(0, ms) / 1000)
+  const min = Math.floor(totalSec / 60)
+  const sec = String(totalSec % 60).padStart(2, '0')
+  return `${min}:${sec}`
+}
+
+function getActiveSongPartIndex(songParts, currentTimeMs) {
+  if (!Array.isArray(songParts) || songParts.length === 0) return -1
+  for (let i = 0; i < songParts.length; i += 1) {
+    const part = songParts[i]
+    if (currentTimeMs >= part.startTime && currentTimeMs < part.endTime) {
+      return i
+    }
+  }
+  return -1
+}
+
+function ensureSongPartStripElement() {
+  ensureSongPartStyle()
+  const app = document.getElementById('app')
+  if (!app) return null
+
+  let strip = document.getElementById(SONG_PART_STRIP_ID)
+  if (!strip) {
+    strip = document.createElement('div')
+    strip.id = SONG_PART_STRIP_ID
+    strip.classList.add('hidden')
+    app.appendChild(strip)
+  }
+
+  songPartStripElement = strip
+  return strip
+}
+
+function dispatchSongPartSeek(startTime) {
+  const seekTime = Math.max(0, Math.trunc(Number(startTime) || 0))
+
+  if (typeof Android !== 'undefined') {
+    if (typeof Android.onSongPartClick === 'function') {
+      Android.onSongPartClick(seekTime)
+      return
+    }
+    if (typeof Android.onLineClick === 'function') {
+      Android.onLineClick(-1, seekTime)
+      return
+    }
+  }
+
+  window.updateTime?.(seekTime)
+}
+
+function refreshSongPartActiveChip() {
+  const strip = songPartStripElement || ensureSongPartStripElement()
+  if (!strip) return
+
+  const currentTimeMs = Math.trunc(Number(state.currentTime ?? 0))
+  const nextActiveIndex = getActiveSongPartIndex(state.songParts, currentTimeMs)
+  if (songPartActiveIndex === nextActiveIndex) return
+
+  const chips = Array.from(strip.querySelectorAll(`.${SONG_PART_CHIP_CLASS}`))
+  chips.forEach((chip, index) => {
+    chip.classList.toggle(SONG_PART_CHIP_ACTIVE_CLASS, index === nextActiveIndex)
+  })
+
+  if (nextActiveIndex >= 0 && chips[nextActiveIndex]) {
+    chips[nextActiveIndex].scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' })
+  }
+
+  songPartActiveIndex = nextActiveIndex
+}
+
+function renderSongPartStrip() {
+  const strip = songPartStripElement || ensureSongPartStripElement()
+  if (!strip) return
+
+  const songParts = Array.isArray(state.songParts) ? state.songParts : []
+  strip.replaceChildren()
+  songPartActiveIndex = -1
+
+  if (songParts.length === 0) {
+    strip.classList.add('hidden')
+    return
+  }
+
+  songParts.forEach((part) => {
+    const chip = document.createElement('button')
+    chip.type = 'button'
+    chip.className = SONG_PART_CHIP_CLASS
+    chip.title = part.name
+    chip.dataset.startTime = String(part.startTime)
+
+    const nameSpan = document.createElement('span')
+    nameSpan.textContent = part.name
+    chip.appendChild(nameSpan)
+
+    const timeSpan = document.createElement('span')
+    timeSpan.className = 'chip-time'
+    timeSpan.textContent = `${formatSongPartTime(part.startTime)} - ${formatSongPartTime(part.endTime)}`
+    chip.appendChild(timeSpan)
+
+    chip.addEventListener('click', (event) => {
+      event.preventDefault()
+      event.stopPropagation()
+      dispatchSongPartSeek(part.startTime)
+    })
+    chip.addEventListener('touchstart', (event) => event.stopPropagation(), { passive: true })
+    chip.addEventListener('touchend', (event) => event.stopPropagation(), { passive: true })
+    strip.appendChild(chip)
+  })
+
+  strip.classList.remove('hidden')
+  refreshSongPartActiveChip()
 }
 
 function applyPauseStyle() {
@@ -135,6 +335,9 @@ let currentProfile = { ...QUALITY_PROFILE }
 let currentBackgroundProfile = { ...DEFAULT_BG_PROFILE }
 let lastIncomingTime = null
 let seekUntilTs = 0
+let manualSeekTargetMs = null
+let manualSeekDirection = 0
+let manualSeekUntilTs = 0
 let playbackClock = {
   anchorPositionMs: 0,
   anchorPerfNowMs: 0,
@@ -142,6 +345,8 @@ let playbackClock = {
   isPlaying: false,
   lastAnchorElapsedMs: 0,
 }
+let songPartStripElement = null
+let songPartActiveIndex = -1
 
 // mirror important state on window so callbacks in the bundle can access them
 window.__amll = window.__amll || {}
@@ -506,10 +711,45 @@ function handleTouchEnd(e) {
   // (触摸结束后不清理样式，保持 touch pause/blur 状态)
 }
 
-function markSeeking(now) {
+function markSeeking(now, holdMs = SEEK_HOLD_MS) {
   state.isSeeking = true
-  seekUntilTs = now + SEEK_HOLD_MS
+  seekUntilTs = Math.max(seekUntilTs, now + holdMs)
   callPlayer('setIsSeeking', true)
+}
+
+function beginManualSeek(nextTimeMs, now = performance.now()) {
+  const target = Math.max(0, Math.trunc(Number(nextTimeMs) || 0))
+  const current = Number(state.currentTime || 0)
+
+  manualSeekTargetMs = target
+  manualSeekDirection = target >= current ? 1 : -1
+  manualSeekUntilTs = now + MANUAL_SEEK_GUARD_MS
+  lastIncomingTime = target
+  markSeeking(now, MANUAL_SEEK_GUARD_MS)
+}
+
+function shouldIgnoreSyncDuringManualSeek(now, positionMs) {
+  if (!Number.isFinite(manualSeekTargetMs)) return false
+  if (now >= manualSeekUntilTs) {
+    manualSeekTargetMs = null
+    manualSeekDirection = 0
+    manualSeekUntilTs = 0
+    return false
+  }
+
+  const target = Number(manualSeekTargetMs)
+  if (manualSeekDirection >= 0) {
+    return positionMs < (target - MANUAL_SEEK_TOLERANCE_MS)
+  }
+  return positionMs > (target + MANUAL_SEEK_TOLERANCE_MS)
+}
+
+function settleManualSeekGuardIfNeeded(positionMs) {
+  if (!Number.isFinite(manualSeekTargetMs)) return
+  if (Math.abs(positionMs - Number(manualSeekTargetMs)) > MANUAL_SEEK_TOLERANCE_MS) return
+  manualSeekTargetMs = null
+  manualSeekDirection = 0
+  manualSeekUntilTs = 0
 }
 
 function updateSeekingStateFromTime(now, nextTimeMs) {
@@ -528,6 +768,11 @@ function updateSeekingStateFromTime(now, nextTimeMs) {
 }
 
 function settleSeekingIfNeeded(now) {
+  if (Number.isFinite(manualSeekTargetMs) && now >= manualSeekUntilTs) {
+    manualSeekTargetMs = null
+    manualSeekDirection = 0
+    manualSeekUntilTs = 0
+  }
   if (!state.isSeeking) return
   if (now < seekUntilTs) return
   state.isSeeking = false
@@ -622,6 +867,10 @@ window.syncPlayback = function (payload) {
     const speed = parsedPlaying && Number.isFinite(parsedSpeed) ? Math.max(0, parsedSpeed) : 0
     const clock = amllGet('playbackClock') || playbackClock
 
+    if (shouldIgnoreSyncDuringManualSeek(now, positionMs)) {
+      return
+    }
+
     if (anchorElapsedMs > 0 && anchorElapsedMs < Number(clock.lastAnchorElapsedMs || 0)) {
       return
     }
@@ -637,6 +886,8 @@ window.syncPlayback = function (payload) {
     const st = amllGet('state') || state
     st.currentTime = positionMs
     updateSeekingStateFromTime(now, positionMs)
+    settleManualSeekGuardIfNeeded(positionMs)
+    refreshSongPartActiveChip()
     setPaused(!parsedPlaying)
   } catch (error) {
     logToAndroid(`[AMLL-ERROR] syncPlayback error: ${error?.message || error}`)
@@ -658,6 +909,7 @@ function animationFrameLoop() {
 
     callPlayer('setCurrentTime', currentTime, state.isSeeking)
     callPlayer('update', delta)
+    refreshSongPartActiveChip()
   } catch (error) {
     logToAndroid(`[AMLL-ERROR] update loop error: ${error?.message || error}`)
   }
@@ -683,6 +935,9 @@ function mountPlayer() {
 
   app.innerHTML = ''
   app.style.background = PLAYER_BACKGROUND
+  songPartStripElement = null
+  songPartActiveIndex = -1
+  state.songParts = []
 
   // 重置专辑图缓存，确保新的 backgroundRender 实例会重新加载专辑图
   amllSet('lastAlbumArt', '')
@@ -713,6 +968,7 @@ function mountPlayer() {
     playerElement.style.inset = 'auto'
     playerElement.style.zIndex = '1'
     app.appendChild(playerElement)
+    ensureSongPartStripElement()
 
     logToAndroid(`[AMLL-INIT] Core LyricPlayer created, container width=${app.clientWidth}, height=${app.clientHeight}`)
 
@@ -759,6 +1015,7 @@ function mountPlayer() {
     callPlayer('setLyricLines', [])
     callPlayer('setCurrentTime', 0, false)
     callPlayer('update', 0)
+    renderSongPartStrip()
     applyBackgroundProfile({ hasLyric: false })
     startAnimationLoop()
 
@@ -786,6 +1043,7 @@ window.setRenderMode = function (mode) {
 window.updateLyrics = function (lyricsPayload) {
   try {
     const rawLines = Array.isArray(lyricsPayload?.lines) ? lyricsPayload.lines : []
+    const rawSongParts = Array.isArray(lyricsPayload?.songParts) ? lyricsPayload.songParts : []
     
     // 调试：检查接收到的背景歌词原始数据
     const bgLines = rawLines.filter(line => line?.isBG)
@@ -797,6 +1055,8 @@ window.updateLyrics = function (lyricsPayload) {
     }
     
     state.lyricLines = normalizeLyricLines(rawLines)
+    state.songParts = normalizeSongParts(rawSongParts)
+    renderSongPartStrip()
 
     // Debug: inspect normalized results
     if (state.lyricLines.length > 0) {
@@ -807,7 +1067,7 @@ window.updateLyrics = function (lyricsPayload) {
     } else {
       logToAndroid('[AMLL-WARN] normalizeLyricLines produced 0 lines')
     }
-    logToAndroid(`[AMLL-DEBUG] lyricsPayload lines count=${rawLines.length}`)
+    logToAndroid(`[AMLL-DEBUG] lyricsPayload lines count=${rawLines.length}, songParts=${state.songParts.length}`)
 
     if (player) {
       const currentTimeToUse = Math.trunc(state.currentTime)
@@ -821,7 +1081,7 @@ window.updateLyrics = function (lyricsPayload) {
       applyBackgroundProfile({ hasLyric: state.lyricLines.length > 0 })
     }
 
-    logToAndroid(`[AMLL-SUCCESS] Updated lyrics (${state.lyricLines.length} lines)`)
+    logToAndroid(`[AMLL-SUCCESS] Updated lyrics (${state.lyricLines.length} lines, ${state.songParts.length} songParts)`)
   } catch (error) {
     logToAndroid(`[AMLL-ERROR] updateLyrics error: ${error?.message || error}`)
   }
@@ -844,6 +1104,7 @@ window.updateAlbumArt = async function (albumUri) {
 window.updateTime = function (timeMs) {
   const parsedTime = Number(timeMs)
   if (!Number.isFinite(parsedTime)) return
+  beginManualSeek(parsedTime)
   const clock = amllGet('playbackClock') || playbackClock
   window.syncPlayback({
     positionMs: parsedTime,
@@ -964,6 +1225,9 @@ window.addEventListener('DOMContentLoaded', () => {
     } else {
       logToAndroid('[AMLL-INIT] WARNING: Android.onLineClick interface NOT found')
     }
+    if (typeof Android.onSongPartClick === 'function') {
+      logToAndroid('[AMLL-INIT] Android.onSongPartClick interface is ready')
+    }
   } else {
     logToAndroid('[AMLL-INIT] WARNING: Android interface NOT available')
   }
@@ -985,7 +1249,11 @@ window.addEventListener('DOMContentLoaded', () => {
         romanLyric: '',
         isBG: false,
         isDuet: false
-      }]
+      }],
+      songParts: [
+        { name: 'Intro', startTime: 0, endTime: 2000 },
+        { name: 'Verse', startTime: 2000, endTime: 4000 }
+      ]
     })
   }
 

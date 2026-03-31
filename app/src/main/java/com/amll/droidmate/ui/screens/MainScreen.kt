@@ -636,6 +636,13 @@ fun MainScreen() {
 }
 
 
+private fun formatSongPartTime(ms: Long): String {
+    val totalSeconds = ms / 1000
+    val minutes = totalSeconds / 60
+    val seconds = totalSeconds % 60
+    return "$minutes:${seconds.toString().padStart(2, '0')}"
+}
+
 @Composable
 private fun SongPartsStrip(
     songParts: List<SongPart>,
@@ -669,19 +676,28 @@ private fun SongPartsStrip(
                 val chipTextColor = if (isActive) activeTextColor else textColor
                 Box(
                     modifier = Modifier
-                        .clip(RoundedCornerShape(100))
+                        .clip(RoundedCornerShape(12.dp))
                         .background(chipBackground)
                         .clickable { onSeekToPart(part) }
                         .padding(horizontal = 12.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center
                 ) {
-                    Text(
-                        text = part.name,
-                        color = chipTextColor,
-                        fontSize = 12.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text(
+                            text = part.name,
+                            color = chipTextColor,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            text = "${formatSongPartTime(part.startTime)} - ${formatSongPartTime(part.endTime)}",
+                            color = chipTextColor.copy(alpha = 0.7f),
+                            fontSize = 10.sp,
+                            maxLines = 1
+                        )
+                    }
                 }
             }
         }

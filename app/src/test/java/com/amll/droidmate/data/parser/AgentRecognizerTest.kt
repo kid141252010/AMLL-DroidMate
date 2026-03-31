@@ -19,8 +19,10 @@ class AgentRecognizerTest {
         assertTrue(result.all { it.agent != null })
         val agents = result.mapNotNull { it.agent }.distinct()
         assertEquals(2, agents.size)
-        assertTrue(result[0].isDuet)
+        assertFalse(result[0].isDuet)
+        assertFalse(result[1].isDuet)
         assertTrue(result[2].isDuet)
+        assertTrue(result[3].isDuet)
     }
 
     private fun createLine(text: String): LyricLine {

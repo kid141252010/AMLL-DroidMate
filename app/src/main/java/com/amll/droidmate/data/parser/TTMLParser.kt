@@ -99,7 +99,7 @@ object TTMLParser {
                 List(parsedParagraphs.size) { false }
             }
             uniqueAgents.size == 2 -> {
-                val leftAgent = pickLeftAgentForTwo(uniqueAgents[0], uniqueAgents[1])
+                val leftAgent = normalizedAgents.firstOrNull { it != null } ?: uniqueAgents.first()
                 Timber.d("[AGENT-DEBUG] Mode: exactly 2 agents. leftAgent=$leftAgent, rightAgent=${uniqueAgents.firstOrNull { it != leftAgent }}")
                 normalizedAgents.mapIndexed { idx, agent ->
                     val isDuet = agent != null && agent != leftAgent
@@ -574,21 +574,6 @@ object TTMLParser {
         return normalized?.ifBlank { null }
     }
 
-    private fun pickLeftAgentForTwo(agentA: String, agentB: String): String {
-        val numberA = extractFirstNumber(agentA)
-        val numberB = extractFirstNumber(agentB)
-
-        val result = when {
-            numberA != null && numberB != null -> if (numberA <= numberB) agentA else agentB
-            numberA != null -> agentA
-            numberB != null -> agentB
-            else -> if (agentA <= agentB) agentA else agentB
-        }
-        
-        Timber.d("[AGENT-DEBUG] pickLeftAgentForTwo: agentA='$agentA'(num=$numberA) vs agentB='$agentB'(num=$numberB) -> leftAgent='$result'")
-        return result
-    }
-
     private fun buildAlternatingDuetFlags(agents: List<String?>): List<Boolean> {
         val flags = MutableList(agents.size) { false }
         var lastAgent: String? = null
@@ -616,11 +601,6 @@ object TTMLParser {
         }
 
         return flags
-    }
-
-    private fun extractFirstNumber(value: String): Int? {
-        val match = Regex("\\d+").find(value) ?: return null
-        return match.value.toIntOrNull()
     }
 
     private fun appendDelimiterSpaceIfNeeded(
