@@ -41478,11 +41478,11 @@ void main(void)
     let o2 = (e8) => e8.location[i2], s2 = (e8) => e8.uTangent[i2], c2 = (e8) => e8.vTangent[i2];
     return a2[0] = o2(e7), a2[1] = o2(t2), a2[2] = c2(e7), a2[3] = c2(t2), a2[4] = o2(n2), a2[5] = o2(r2), a2[6] = c2(n2), a2[7] = c2(r2), a2[8] = s2(e7), a2[9] = s2(t2), a2[10] = 0, a2[11] = 0, a2[12] = s2(n2), a2[13] = s2(r2), a2[14] = 0, a2[15] = 0, a2;
   }
-  function I$1(e7, t2, n2, r2, i2, a2 = u.create()) {
+  function se$1(e7, t2, n2, r2, i2, a2 = u.create()) {
     let o2 = (e8) => e8.color[i2];
     return a2.fill(0), a2[0] = o2(e7), a2[1] = o2(t2), a2[4] = o2(n2), a2[5] = o2(r2), a2;
   }
-  var se$1 = class se {
+  var ce$1 = class ce {
     _width = 0;
     _height = 0;
     _data = [];
@@ -41504,9 +41504,9 @@ void main(void)
     get height() {
       return this._height;
     }
-  }, ce$1 = class ce extends ne {
+  }, le$1 = class le extends ne {
     _subDivisions = 10;
-    _controlPoints = new se$1(3, 3);
+    _controlPoints = new ce$1(3, 3);
     constructor(e7, t2, n2, r2) {
       super(e7, t2, n2, r2), this.resizeControlPoints(3, 3), Object.seal(this);
     }
@@ -41554,7 +41554,7 @@ void main(void)
       }
       for (let e8 = 0; e8 < r2 - 1; e8++) for (let t3 = 0; t3 < i2 - 1; t3++) {
         let n3 = this._controlPoints.get(e8, t3), o3 = this._controlPoints.get(e8, t3 + 1), u2 = this._controlPoints.get(e8 + 1, t3), d2 = this._controlPoints.get(e8 + 1, t3 + 1);
-        oe(n3, o3, u2, d2, "x", this.tempX), oe(n3, o3, u2, d2, "y", this.tempY), I$1(n3, o3, u2, d2, "r", this.tempR), I$1(n3, o3, u2, d2, "g", this.tempG), I$1(n3, o3, u2, d2, "b", this.tempB), this.precomputeMatrix(this.tempX, this.tempXAcc), this.precomputeMatrix(this.tempY, this.tempYAcc), this.precomputeMatrix(this.tempR, this.tempRAcc), this.precomputeMatrix(this.tempG, this.tempGAcc), this.precomputeMatrix(this.tempB, this.tempBAcc);
+        oe(n3, o3, u2, d2, "x", this.tempX), oe(n3, o3, u2, d2, "y", this.tempY), se$1(n3, o3, u2, d2, "r", this.tempR), se$1(n3, o3, u2, d2, "g", this.tempG), se$1(n3, o3, u2, d2, "b", this.tempB), this.precomputeMatrix(this.tempX, this.tempXAcc), this.precomputeMatrix(this.tempY, this.tempYAcc), this.precomputeMatrix(this.tempR, this.tempRAcc), this.precomputeMatrix(this.tempG, this.tempGAcc), this.precomputeMatrix(this.tempB, this.tempBAcc);
         let f2 = e8 / (r2 - 1), m2 = t3 / (i2 - 1), h2 = t3 * a2, g2 = e8 * a2;
         for (let e9 = 0; e9 < a2; e9++) {
           let t4 = h2 + e9, n4 = e9 * 4;
@@ -41567,7 +41567,7 @@ void main(void)
       }
       this.update();
     }
-  }, le$1 = class le {
+  }, ue$1 = class ue {
     tex;
     constructor(e7, t2) {
       this.gl = e7;
@@ -41582,12 +41582,12 @@ void main(void)
       this.gl.deleteTexture(this.tex);
     }
   };
-  function ue$1(e7, t2) {
+  function de$1(e7, t2) {
     if ("OffscreenCanvas" in window) return new OffscreenCanvas(e7, t2);
     let n2 = document.createElement("canvas");
     return n2.width = e7, n2.height = t2, n2;
   }
-  var de$1 = class de extends c$1 {
+  var fe$1 = class fe extends c$1 {
     gl;
     lastFrameTime = 0;
     frameTime = 0;
@@ -41604,7 +41604,7 @@ void main(void)
     fbo = null;
     fboTexture = null;
     manualControl = false;
-    reduceImageSizeCanvas = ue$1(32, 32);
+    reduceImageSizeCanvas = de$1(32, 32);
     targetSize = m.fromValues(0, 0);
     currentSize = m.fromValues(0, 0);
     isNoCover = true;
@@ -41768,9 +41768,9 @@ void main(void)
         let i3 = t3 * 0.3 + n3 * 0.59 + r3 * 0.11;
         t3 = i3 * -2 + t3 * 3, n3 = i3 * -2 + n3 * 3, r3 = i3 * -2 + r3 * 3, t3 = (t3 - 128) * 1.7 + 128, n3 = (n3 - 128) * 1.7 + 128, r3 = (r3 - 128) * 1.7 + 128, d2[e8] = t3 * 0.75, d2[e8 + 1] = n3 * 0.75, d2[e8 + 2] = r3 * 0.75;
       }
-      if (y(u2, 2, 4), this.manualControl && this.meshStates.length > 0) this.meshStates[0].texture.dispose(), this.meshStates[0].texture = new le$1(this.gl, u2);
+      if (y(u2, 2, 4), this.manualControl && this.meshStates.length > 0) this.meshStates[0].texture.dispose(), this.meshStates[0].texture = new ue$1(this.gl, u2);
       else {
-        let e8 = new ce$1(this.gl, this.mainProgram.attrs.a_pos, this.mainProgram.attrs.a_color, this.mainProgram.attrs.a_uv);
+        let e8 = new le$1(this.gl, this.mainProgram.attrs.a_pos, this.mainProgram.attrs.a_color, this.mainProgram.attrs.a_uv);
         e8.resetSubdivition(50);
         let t3 = Math.random() > 0.8 ? j$1(6, 6) : S[Math.floor(Math.random() * S.length)];
         e8.resizeControlPoints(t3.width, t3.height);
@@ -41782,7 +41782,7 @@ void main(void)
         e8.updateMesh();
         let i3 = {
           mesh: e8,
-          texture: new le$1(this.gl, u2),
+          texture: new ue$1(this.gl, u2),
           alpha: 0
         };
         this.meshStates.push(i3);
@@ -41807,9 +41807,9 @@ void main(void)
     updatePerformanceStats(e7) {
       this.enablePerformanceMonitoring && (this.frameCount++, e7 - this.lastFPSUpdate > 1e3 && (this.currentFPS = this.frameCount, this.frameCount = 0, this.lastFPSUpdate = e7));
     }
-  }, fe$1 = class fe extends Container {
+  }, pe$1 = class pe extends Container {
     time = 0;
-  }, pe$1 = class pe extends c$1 {
+  }, me$1 = class me extends c$1 {
     app;
     curContainer;
     staticMode = false;
@@ -41887,7 +41887,7 @@ void main(void)
         console.warn(`failed on loading album image, retrying (${i2})`, e7, t2), a2 = null, i2--;
       }
       if (!a2) return;
-      let s2 = new fe$1(), c2 = new Sprite(a2), l2 = new Sprite(a2), u2 = new Sprite(a2), d2 = new Sprite(a2);
+      let s2 = new pe$1(), c2 = new Sprite(a2), l2 = new Sprite(a2), u2 = new Sprite(a2), d2 = new Sprite(a2);
       c2.anchor.set(0.5, 0.5), l2.anchor.set(0.5, 0.5), u2.anchor.set(0.5, 0.5), d2.anchor.set(0.5, 0.5), c2.rotation = Math.random() * Math.PI * 2, l2.rotation = Math.random() * Math.PI * 2, u2.rotation = Math.random() * Math.PI * 2, d2.rotation = Math.random() * Math.PI * 2, s2.addChild(c2, l2, u2, d2), this.curContainer && this.lastContainer.add(this.curContainer), this.curContainer = s2, this.app.stage.addChild(s2), this.curContainer.alpha = 0, this.app.ticker.start();
     }
     dispose() {
@@ -41896,7 +41896,7 @@ void main(void)
     getElement() {
       return this.canvas;
     }
-  }, me$1 = class e6 {
+  }, he$1 = class e6 {
     element;
     renderer;
     constructor(e7, t2) {
@@ -41939,7 +41939,7 @@ void main(void)
     dispose() {
       this.renderer.dispose(), this.element.remove();
     }
-  }, L$1 = {
+  }, I$1 = {
     lyricLine: "_lyricLine_gmpzk_11",
     lyricBgLine: "_lyricBgLine_gmpzk_99",
     active: "_active_gmpzk_125",
@@ -41958,7 +41958,7 @@ void main(void)
     enabled: "_enabled_gmpzk_391",
     tmpDisableTransition: "_tmpDisableTransition_gmpzk_443",
     bottomLine: "_bottomLine_gmpzk_451"
-  }, he$1 = typeof self == "object" ? self : globalThis, ge$1 = (e7, t2) => {
+  }, ge$1 = typeof self == "object" ? self : globalThis, _e$1 = (e7, t2) => {
     let n2 = (t3, n3) => (e7.set(n3, t3), t3), r2 = (i2) => {
       if (e7.has(i2)) return e7.get(i2);
       let [a2, o2] = t2[i2];
@@ -41994,7 +41994,7 @@ void main(void)
         }
         case 7: {
           let { name: e8, message: t3 } = o2;
-          return n2(new he$1[e8](t3), i2);
+          return n2(new ge$1[e8](t3), i2);
         }
         case 8:
           return n2(BigInt(o2), i2);
@@ -42007,37 +42007,37 @@ void main(void)
           return n2(new DataView(e8), o2);
         }
       }
-      return n2(new he$1[a2](o2), i2);
+      return n2(new ge$1[a2](o2), i2);
     };
     return r2;
-  }, _e$1 = (e7) => ge$1(/* @__PURE__ */ new Map(), e7)(0), R$1 = "", { toString: ve$1 } = {}, { keys: ye } = Object, z$1 = (e7) => {
+  }, ve$1 = (e7) => _e$1(/* @__PURE__ */ new Map(), e7)(0), L$1 = "", { toString: ye } = {}, { keys: be$1 } = Object, R$1 = (e7) => {
     let t2 = typeof e7;
     if (t2 !== "object" || !e7) return [0, t2];
-    let n2 = ve$1.call(e7).slice(8, -1);
+    let n2 = ye.call(e7).slice(8, -1);
     switch (n2) {
       case "Array":
-        return [1, R$1];
+        return [1, L$1];
       case "Object":
-        return [2, R$1];
+        return [2, L$1];
       case "Date":
-        return [3, R$1];
+        return [3, L$1];
       case "RegExp":
-        return [4, R$1];
+        return [4, L$1];
       case "Map":
-        return [5, R$1];
+        return [5, L$1];
       case "Set":
-        return [6, R$1];
+        return [6, L$1];
       case "DataView":
         return [1, n2];
     }
     return n2.includes("Array") ? [1, n2] : n2.includes("Error") ? [7, n2] : [2, n2];
-  }, B$1 = ([e7, t2]) => e7 === 0 && (t2 === "function" || t2 === "symbol"), be$1 = (e7, t2, n2, r2) => {
+  }, z$1 = ([e7, t2]) => e7 === 0 && (t2 === "function" || t2 === "symbol"), xe$1 = (e7, t2, n2, r2) => {
     let i2 = (e8, t3) => {
       let i3 = r2.push(e8) - 1;
       return n2.set(t3, i3), i3;
     }, a2 = (r3) => {
       if (n2.has(r3)) return n2.get(r3);
-      let [o2, s2] = z$1(r3);
+      let [o2, s2] = R$1(r3);
       switch (o2) {
         case 0: {
           let t3 = r3;
@@ -42075,7 +42075,7 @@ void main(void)
           }
           if (t2 && "toJSON" in r3) return a2(r3.toJSON());
           let n3 = [], c3 = i2([o2, n3], r3);
-          for (let t3 of ye(r3)) (e7 || !B$1(z$1(r3[t3]))) && n3.push([a2(t3), a2(r3[t3])]);
+          for (let t3 of be$1(r3)) (e7 || !z$1(R$1(r3[t3]))) && n3.push([a2(t3), a2(r3[t3])]);
           return c3;
         }
         case 3:
@@ -42089,12 +42089,12 @@ void main(void)
         }
         case 5: {
           let t3 = [], n3 = i2([o2, t3], r3);
-          for (let [n4, i3] of r3) (e7 || !(B$1(z$1(n4)) || B$1(z$1(i3)))) && t3.push([a2(n4), a2(i3)]);
+          for (let [n4, i3] of r3) (e7 || !(z$1(R$1(n4)) || z$1(R$1(i3)))) && t3.push([a2(n4), a2(i3)]);
           return n3;
         }
         case 6: {
           let t3 = [], n3 = i2([o2, t3], r3);
-          for (let n4 of r3) (e7 || !B$1(z$1(n4))) && t3.push(a2(n4));
+          for (let n4 of r3) (e7 || !z$1(R$1(n4))) && t3.push(a2(n4));
           return n3;
         }
       }
@@ -42105,10 +42105,10 @@ void main(void)
       }], r3);
     };
     return a2;
-  }, xe$1 = (e7, { json: t2, lossy: n2 } = {}) => {
+  }, Se$1 = (e7, { json: t2, lossy: n2 } = {}) => {
     let r2 = [];
-    return be$1(!(t2 || n2), !!t2, /* @__PURE__ */ new Map(), r2)(e7), r2;
-  }, Se$1 = typeof structuredClone == "function" ? (e7, t2) => t2 && ("json" in t2 || "lossy" in t2) ? _e$1(xe$1(e7, t2)) : structuredClone(e7) : (e7, t2) => _e$1(xe$1(e7, t2)), Ce$1 = (e7, t2) => e7.size === t2.size && [...e7].every((e8) => t2.has(e8)), V$1 = (e7) => /^[\p{Unified_Ideograph}\u0800-\u9FFC]+$/u.test(e7), we$1 = {
+    return xe$1(!(t2 || n2), !!t2, /* @__PURE__ */ new Map(), r2)(e7), r2;
+  }, Ce$1 = typeof structuredClone == "function" ? (e7, t2) => t2 && ("json" in t2 || "lossy" in t2) ? ve$1(Se$1(e7, t2)) : structuredClone(e7) : (e7, t2) => ve$1(Se$1(e7, t2)), B$1 = (e7) => /^[\p{Unified_Ideograph}\u0800-\u9FFC]+$/u.test(e7), we$1 = {
     normalizeSpaces: true,
     resetLineTimestamps: true,
     convertExcessiveBackgroundLines: true,
@@ -42200,7 +42200,7 @@ void main(void)
   function Ne$1(e7) {
     return Me$1(e7);
   }
-  var H$1 = class H {
+  var V$1 = class V {
     currentPosition = 0;
     targetPosition = 0;
     currentTime = 0;
@@ -42256,7 +42256,7 @@ void main(void)
     let u2 = Math.sqrt(4 * c2 * o2 - s2 ** 2), d2 = (s2 * l2 - 2 * c2 * t2) / u2, f2 = 0.5 * u2 / c2, p2 = -(0.5 * s2) / c2;
     return (t3) => (t3 -= r2, t3 < 0 ? e7 : n2 - (Math.cos(t3 * f2) * l2 + Math.sin(t3 * f2) * d2) * Math.E ** (t3 * p2));
   }
-  var U$1 = [], Fe$1 = [], Ie$1 = false;
+  var H$1 = [], Fe$1 = [], Ie$1 = false;
   function Le$1() {
     let e7 = Fe$1.shift();
     for (; e7; ) {
@@ -42267,13 +42267,13 @@ void main(void)
       }
       e7 = Fe$1.shift();
     }
-    for (e7 = U$1.shift(); e7; ) {
+    for (e7 = H$1.shift(); e7; ) {
       try {
         e7.resolve(e7.task());
       } catch (t2) {
         e7.reject(t2);
       }
-      e7 = U$1.shift();
+      e7 = H$1.shift();
     }
     Ie$1 = false;
   }
@@ -42290,7 +42290,7 @@ void main(void)
     }, n2 = new Promise((e8, n3) => {
       t2.resolve = e8, t2.reject = n3;
     });
-    return U$1.push(t2), Re$1(), n2;
+    return H$1.push(t2), Re$1(), n2;
   }
   function Be$1(e7) {
     let t2 = {
@@ -42311,13 +42311,13 @@ void main(void)
     delay = 0;
     lineSize = [0, 0];
     lineTransforms = {
-      posX: new H$1(0),
-      posY: new H$1(0)
+      posX: new V$1(0),
+      posY: new V$1(0)
     };
     isFocused = false;
     blur = 0;
     constructor(e7) {
-      this.lyricPlayer = e7, this.element.setAttribute("class", `${L$1.lyricLine} ${L$1.bottomLine}`), this.element.dataset.bottomLine = "true", this.rebuildStyle();
+      this.lyricPlayer = e7, this.element.setAttribute("class", `${I$1.lyricLine} ${I$1.bottomLine}`), this.element.dataset.bottomLine = "true", this.rebuildStyle();
     }
     async measureSize() {
       return await ze$1(() => [this.element.clientWidth, this.element.clientHeight]);
@@ -42340,8 +42340,8 @@ void main(void)
       return this.element;
     }
     setTransform(e7 = this.left, t2 = this.top, n2 = 0, r2 = false, i2 = 0) {
-      this.left = e7, this.top = t2, this.delay = i2 * 1e3 | 0, r2 || !this.lyricPlayer.getEnableSpring() ? (this.blur = Math.min(32, n2), r2 && this.element.classList.add(L$1.tmpDisableTransition), this.lineTransforms.posX.setPosition(e7), this.lineTransforms.posY.setPosition(t2), this.lyricPlayer.getEnableSpring() ? this.rebuildStyle() : this.show(), r2 && requestAnimationFrame(() => {
-        this.element.classList.remove(L$1.tmpDisableTransition);
+      this.left = e7, this.top = t2, this.delay = i2 * 1e3 | 0, r2 || !this.lyricPlayer.getEnableSpring() ? (this.blur = Math.min(32, n2), r2 && this.element.classList.add(I$1.tmpDisableTransition), this.lineTransforms.posX.setPosition(e7), this.lineTransforms.posY.setPosition(t2), this.lyricPlayer.getEnableSpring() ? this.rebuildStyle() : this.show(), r2 && requestAnimationFrame(() => {
+        this.element.classList.remove(I$1.tmpDisableTransition);
       })) : (this.blur = Math.min(5, n2), this.lineTransforms.posX.setTargetPosition(e7, i2), this.lineTransforms.posY.setTargetPosition(t2, i2));
     }
     update(e7 = 0) {
@@ -42362,7 +42362,7 @@ void main(void)
   function Ue$1(e7) {
     return e7 === 1 ? 1 : 1 - 2 ** (-10 * e7);
   }
-  var W$1 = (e7, t2, n2) => Math.max(e7, Math.min(t2, n2)), We$1 = class We {
+  var U$1 = (e7, t2, n2) => Math.max(e7, Math.min(t2, n2)), We$1 = class We {
     element = document.createElement("div");
     dot0 = document.createElement("span");
     dot1 = document.createElement("span");
@@ -42375,7 +42375,7 @@ void main(void)
     currentTime = 0;
     targetBreatheDuration = 1500;
     constructor() {
-      this.element.className = L$1.interludeDots, this.element.appendChild(this.dot0), this.element.appendChild(this.dot1), this.element.appendChild(this.dot2);
+      this.element.className = I$1.interludeDots, this.element.appendChild(this.dot0), this.element.appendChild(this.dot1), this.element.appendChild(this.dot2);
     }
     getElement() {
       return this.element;
@@ -42384,13 +42384,13 @@ void main(void)
       this.left = e7, this.top = t2, this.update();
     }
     setInterlude(e7) {
-      this.currentInterlude = e7, this.currentTime = e7?.[0] ?? 0, e7 ? this.element.classList.add(L$1.enabled) : this.element.classList.remove(L$1.enabled);
+      this.currentInterlude = e7, this.currentTime = e7?.[0] ?? 0, e7 ? this.element.classList.add(I$1.enabled) : this.element.classList.remove(I$1.enabled);
     }
     pause() {
-      this.playing = false, this.element.classList.remove(L$1.playing);
+      this.playing = false, this.element.classList.remove(I$1.playing);
     }
     resume() {
-      this.playing = true, this.element.classList.add(L$1.playing);
+      this.playing = true, this.element.classList.add(I$1.playing);
     }
     update(e7 = 0) {
       if (!this.playing) return;
@@ -42400,11 +42400,11 @@ void main(void)
         let e8 = this.currentInterlude[1] - this.currentInterlude[0], n2 = this.currentTime - this.currentInterlude[0];
         if (n2 <= e8) {
           let r2 = e8 / Math.ceil(e8 / this.targetBreatheDuration), i2 = 1, a2 = 1;
-          i2 *= Math.sin(1.5 * Math.PI - n2 / r2 * 2) / 20 + 1, n2 < 2e3 && (i2 *= Ue$1(n2 / 2e3)), n2 < 500 ? a2 = 0 : n2 < 1e3 && (a2 *= (n2 - 500) / 500), e8 - n2 < 750 && (i2 *= 1 - He$1((750 - (e8 - n2)) / 750 / 2)), e8 - n2 < 375 && (a2 *= W$1(0, (e8 - n2) / 375, 1));
+          i2 *= Math.sin(1.5 * Math.PI - n2 / r2 * 2) / 20 + 1, n2 < 2e3 && (i2 *= Ue$1(n2 / 2e3)), n2 < 500 ? a2 = 0 : n2 < 1e3 && (a2 *= (n2 - 500) / 500), e8 - n2 < 750 && (i2 *= 1 - He$1((750 - (e8 - n2)) / 750 / 2)), e8 - n2 < 375 && (a2 *= U$1(0, (e8 - n2) / 375, 1));
           let o2 = Math.max(0, e8 - 750);
           i2 = Math.max(0, i2) * 0.7, t2 += ` scale(${i2})`;
-          let s2 = W$1(0.25, n2 * 3 / o2 * 0.75, 1), c2 = W$1(0.25, (n2 - o2 / 3) * 3 / o2 * 0.75, 1), l2 = W$1(0.25, (n2 - o2 / 3 * 2) * 3 / o2 * 0.75, 1);
-          this.dot0.style.opacity = `${W$1(0, Math.max(0, a2 * s2), 1)}`, this.dot1.style.opacity = `${W$1(0, Math.max(0, a2 * c2), 1)}`, this.dot2.style.opacity = `${W$1(0, Math.max(0, a2 * l2), 1)}`;
+          let s2 = U$1(0.25, n2 * 3 / o2 * 0.75, 1), c2 = U$1(0.25, (n2 - o2 / 3) * 3 / o2 * 0.75, 1), l2 = U$1(0.25, (n2 - o2 / 3 * 2) * 3 / o2 * 0.75, 1);
+          this.dot0.style.opacity = `${U$1(0, Math.max(0, a2 * s2), 1)}`, this.dot1.style.opacity = `${U$1(0, Math.max(0, a2 * c2), 1)}`, this.dot2.style.opacity = `${U$1(0, Math.max(0, a2 * l2), 1)}`;
         } else t2 += " scale(0)", this.dot0.style.opacity = "0", this.dot1.style.opacity = "0", this.dot2.style.opacity = "0";
         t2 += ";", this.lastStyle !== t2 && (this.element.setAttribute("style", t2), this.lastStyle = t2);
       }
@@ -42412,7 +42412,7 @@ void main(void)
     dispose() {
       this.element.remove();
     }
-  }, G$1 = class G extends EventTarget {
+  }, W$1 = class W extends EventTarget {
     element = document.createElement("div");
     currentTime = 0;
     lyricLinesSize = /* @__PURE__ */ new WeakMap();
@@ -42610,7 +42610,7 @@ void main(void)
       return this.overscanPx;
     }
     setEnableSpring(e7 = true) {
-      this.disableSpring = !e7, e7 ? this.element.classList.remove(L$1.disableSpring) : this.element.classList.add(L$1.disableSpring), this.calcLayout(true);
+      this.disableSpring = !e7, e7 ? this.element.classList.remove(I$1.disableSpring) : this.element.classList.add(I$1.disableSpring), this.calcLayout(true);
     }
     getEnableSpring() {
       return !this.disableSpring;
@@ -42635,7 +42635,7 @@ void main(void)
       };
     }
     setLyricLines(e7, t2 = 0) {
-      this.initialLayoutFinished = true, this.lastCurrentTime = t2, this.currentTime = t2, this.currentLyricLines = Se$1(e7), this.processedLines = Se$1(this.currentLyricLines), je$1(this.processedLines, this.optimizeOptions), this.isNonDynamic = true;
+      this.initialLayoutFinished = true, this.lastCurrentTime = t2, this.currentTime = t2, this.currentLyricLines = Ce$1(e7), this.processedLines = Ce$1(this.currentLyricLines), je$1(this.processedLines, this.optimizeOptions), this.isNonDynamic = true;
       for (let e8 of this.processedLines) if (e8.words.length > 1) {
         this.isNonDynamic = false;
         break;
@@ -42653,7 +42653,13 @@ void main(void)
       for (let r3 of this.hotLines) {
         let i3 = this.processedLines[r3];
         if (i3) {
-          if (i3.isBG) continue;
+          if (i3.isBG) {
+            if (i3.startTime > e7 || i3.endTime <= e7) {
+              let e8 = r3 - 1;
+              this.hotLines.has(e8) || (this.hotLines.delete(r3), n2.add(r3), t2 && this.currentLyricLineObjects[r3]?.disable());
+            }
+            continue;
+          }
           let a2 = this.processedLines[r3 + 1];
           if (a2?.isBG) {
             let o2 = this.processedLines[r3 + 2], s2 = Math.min(i3.startTime, a2?.startTime), c2 = Math.min(Math.max(i3.endTime, o2?.startTime ?? Number.MAX_VALUE), Math.max(i3.endTime, a2?.endTime));
@@ -42669,24 +42675,29 @@ void main(void)
       if (t2) {
         this.bufferedLines.clear();
         for (let e8 of this.hotLines) this.bufferedLines.add(e8);
-        if (this.bufferedLines.size > 0) this.scrollToIndex = Math.min(...this.bufferedLines);
+        let t3 = this.resolveScrollAnchorIndex();
+        if (t3 !== void 0) this.scrollToIndex = t3;
         else {
-          let t3 = this.processedLines.findIndex((t4) => t4.startTime >= e7);
-          this.scrollToIndex = t3 === -1 ? this.processedLines.length : t3;
+          let t4 = this.processedLines.findIndex((t5) => !t5.isBG && t5.startTime >= e7), n3 = t4 === -1 ? this.processedLines.findIndex((t5) => t5.startTime >= e7) : t4;
+          this.scrollToIndex = n3 === -1 ? this.processedLines.length : n3;
         }
         this.resetScroll(), this.calcLayout();
       } else if (r2.size > 0 || i2.size > 0) if (r2.size === 0 && i2.size > 0) {
-        for (let e8 of i2) this.bufferedLines.add(e8), this.currentLyricLineObjects[e8]?.enable();
-        this.scrollToIndex = Math.min(...this.bufferedLines), this.calcLayout();
+        for (let e9 of i2) this.bufferedLines.add(e9), this.currentLyricLineObjects[e9]?.enable();
+        let e8 = this.resolveScrollAnchorIndex();
+        e8 !== void 0 && (this.scrollToIndex = e8), this.calcLayout();
       } else if (i2.size === 0 && r2.size > 0) {
-        if (Ce$1(r2, this.bufferedLines)) {
-          for (let e8 of this.bufferedLines) this.hotLines.has(e8) || (this.bufferedLines.delete(e8), this.currentLyricLineObjects[e8]?.disable());
-          this.calcLayout();
-        }
-      } else {
-        for (let e8 of i2) this.bufferedLines.add(e8), this.currentLyricLineObjects[e8]?.enable();
         for (let e8 of r2) this.bufferedLines.delete(e8), this.currentLyricLineObjects[e8]?.disable();
-        this.bufferedLines.size > 0 && (this.scrollToIndex = Math.min(...this.bufferedLines)), this.calcLayout();
+        if (this.bufferedLines.size > 0) {
+          let e8 = this.resolveScrollAnchorIndex();
+          e8 !== void 0 && (this.scrollToIndex = e8);
+        }
+        this.calcLayout();
+      } else {
+        for (let e9 of i2) this.bufferedLines.add(e9), this.currentLyricLineObjects[e9]?.enable();
+        for (let e9 of r2) this.bufferedLines.delete(e9), this.currentLyricLineObjects[e9]?.disable();
+        let e8 = this.resolveScrollAnchorIndex();
+        e8 !== void 0 && (this.scrollToIndex = e8), this.calcLayout();
       }
       if (this.bufferedLines.size === 0 && this.processedLines.length > 0) {
         let t3 = this.processedLines[this.processedLines.length - 1], n3 = this.bottomLine.getElement().innerHTML.trim().length > 0;
@@ -42696,6 +42707,18 @@ void main(void)
         }
       }
       this.lastCurrentTime = e7;
+    }
+    findLatestMainLineIndex(e7) {
+      let t2;
+      for (let n2 of e7) {
+        let e8 = this.processedLines[n2];
+        !e8 || e8.isBG || (t2 === void 0 || n2 > t2) && (t2 = n2);
+      }
+      return t2;
+    }
+    resolveScrollAnchorIndex() {
+      let e7 = this.findLatestMainLineIndex(this.hotLines);
+      return e7 === void 0 ? this.findLatestMainLineIndex(this.bufferedLines) : e7;
     }
     updateDynamicSpringParams() {
       if (!this.getEnableSpring() || this.processedLines.length === 0) return;
@@ -42807,15 +42830,15 @@ void main(void)
     dispose() {
       this.element.remove(), window.removeEventListener("pageshow", this.onPageShow), window.removeEventListener("pagehide", this.onPageHide);
     }
-  }, K$1 = class K extends EventTarget {
+  }, G$1 = class G extends EventTarget {
     top = 0;
     scale = 1;
     blur = 0;
     opacity = 1;
     delay = 0;
     lineTransforms = {
-      posY: new H$1(0),
-      scale: new H$1(100)
+      posY: new V$1(0),
+      scale: new V$1(100)
     };
     onLineSizeChange(e7) {
     }
@@ -42825,7 +42848,7 @@ void main(void)
     rebuildElement() {
     }
     static shouldEmphasize(e7) {
-      return V$1(e7.word) ? e7.endTime - e7.startTime >= 1e3 : e7.endTime - e7.startTime >= 1e3 && e7.word.trim().length <= 7 && e7.word.trim().length > 1;
+      return B$1(e7.word) ? e7.endTime - e7.startTime >= 1e3 : e7.endTime - e7.startTime >= 1e3 && e7.word.trim().length <= 7 && e7.word.trim().length > 1;
     }
     dispose() {
     }
@@ -42833,16 +42856,16 @@ void main(void)
   function Ge$1(e7) {
     return e7;
   }
-  var { cbrt: Ke$1, sqrt: qe$1, PI: q$1 } = Math, Je$1 = (e7, t2, n2, r2, i2) => {
+  var { cbrt: Ke$1, sqrt: qe$1, PI: K$1 } = Math, Je$1 = (e7, t2, n2, r2, i2) => {
     let a2 = t2 + n2 * e7, o2 = a2 ** 2 + r2;
     if (o2 > 0) {
       let e8 = qe$1(o2);
       return Ke$1(a2 + e8) + Ke$1(a2 - e8) - i2;
     }
-    let s2 = Ke$1(qe$1(a2 * a2 - o2)), c2 = a2 ? Math.atan(qe$1(-o2) / a2) : -q$1 / 2, l2;
-    return l2 = n2 < 0 ? (a2 > 0 ? 2 * q$1 : q$1) - c2 : i2 < 0 ? (a2 > 0 ? 2 * q$1 : -3 * q$1) + c2 : (a2 > 0 ? 0 : q$1) + c2, 2 * s2 * Math.cos(l2 / 3) - i2;
+    let s2 = Ke$1(qe$1(a2 * a2 - o2)), c2 = a2 ? Math.atan(qe$1(-o2) / a2) : -K$1 / 2, l2;
+    return l2 = n2 < 0 ? (a2 > 0 ? 2 * K$1 : K$1) - c2 : i2 < 0 ? (a2 > 0 ? 2 * K$1 : -3 * K$1) + c2 : (a2 > 0 ? 0 : K$1) + c2, 2 * s2 * Math.cos(l2 / 3) - i2;
   }, Ye$1 = (e7, t2, n2, r2) => ((t2 * e7 + 3 * n2) * e7 + r2) * e7;
-  function J$1(e7, t2, n2, r2) {
+  function q$1(e7, t2, n2, r2) {
     if (!(0 <= e7 && e7 <= 1 && 0 <= n2 && n2 <= 1)) throw Error("bezier x values must be in [0, 1] range");
     if (e7 === t2 && n2 === r2) return Ge$1;
     let i2 = 6 * (3 * e7 - 3 * n2 + 1), a2 = 6 * (n2 - 2 * e7), o2 = 3 * e7, s2 = i2 * i2, c2 = a2 * a2, l2 = a2 / i2, u2 = 3 * a2 * o2 / s2 - c2 * a2 / (s2 * i2), d2 = 2 * o2 / i2 - c2 / s2, f2 = d2 * d2 * d2, p2 = 3 / i2, m2 = 3 * t2 - 3 * r2 + 1, h2 = r2 - 2 * t2, g2 = 3 * t2, _2 = i2 ? Je$1 : Ge$1;
@@ -42876,7 +42899,7 @@ void main(void)
           });
           continue;
         }
-        if (V$1(e9) && e9.length > 1 && r3.trim().length === 0) {
+        if (B$1(e9) && e9.length > 1 && r3.trim().length === 0) {
           let r4 = e9.split("");
           for (let e10 of r4) {
             let r5 = 1 / c3 * (n3.endTime - n3.startTime), a4 = n3.startTime + s3 / c3 * (n3.endTime - n3.startTime);
@@ -42966,7 +42989,7 @@ void main(void)
   function et$1(e7, t2 = 4) {
     return `matrix3d(${e7.map((e8, n2) => e8.toFixed(t2)).join(", ")})`;
   }
-  var Y = 32, tt$1 = (e7, t2) => (n2) => Math.min(1, Math.max(0, (n2 - e7) / (t2 - e7))), nt$1 = 0.5, rt$1 = tt$1(0, nt$1), it$1 = tt$1(nt$1, 1), at$1 = J$1(0.2, 0.4, 0.58, 1), ot$1 = J$1(0.3, 0, 0.58, 1), st$1 = (e7) => (t2) => t2 < e7 ? at$1(rt$1(t2)) : 1 - ot$1(it$1(t2));
+  var J$1 = 32, tt$1 = (e7, t2) => (n2) => Math.min(1, Math.max(0, (n2 - e7) / (t2 - e7))), nt$1 = 0.5, rt$1 = tt$1(0, nt$1), it$1 = tt$1(nt$1, 1), at$1 = q$1(0.2, 0.4, 0.58, 1), ot$1 = q$1(0.3, 0, 0.58, 1), st$1 = (e7) => (t2) => t2 < e7 ? at$1(rt$1(t2)) : 1 - ot$1(it$1(t2));
   function ct$1(e7, t2 = 0, n2 = "rgba(0,0,0,var(--bright-mask-alpha, 1.0))", r2 = "rgba(0,0,0,var(--dark-mask-alpha, 1.0))") {
     let i2 = 2 + e7 + t2, a2 = e7 / i2, o2 = (1 - a2) / 2;
     return [`linear-gradient(to right,${n2} ${o2 * 100}%,${r2} ${(o2 + a2) * 100}%)`, i2];
@@ -42975,7 +42998,7 @@ void main(void)
     constructor(e7, t2) {
       super(t2.type, t2), this.line = e7;
     }
-  }, ut$1 = class ut extends K$1 {
+  }, ut$1 = class ut extends G$1 {
     element = document.createElement("div");
     splittedWords = [];
     built = false;
@@ -42995,9 +43018,9 @@ void main(void)
       isBG: false,
       isDuet: false
     }) {
-      super(), this.lyricPlayer = e7, this.lyricLine = t2, this._prevParentEl = e7.getElement(), e7.resizeObserver.observe(this.element), this.element.setAttribute("class", L$1.lyricLine), this.lyricLine.isBG && this.element.classList.add(L$1.lyricBgLine), this.lyricLine.isDuet && this.element.classList.add(L$1.lyricDuetLine), this.lineTransforms.posY.setPosition(window.innerHeight * 2), this.element.appendChild(document.createElement("div")), this.element.appendChild(document.createElement("div")), this.element.appendChild(document.createElement("div"));
+      super(), this.lyricPlayer = e7, this.lyricLine = t2, this._prevParentEl = e7.getElement(), e7.resizeObserver.observe(this.element), this.element.setAttribute("class", I$1.lyricLine), this.lyricLine.isBG && this.element.classList.add(I$1.lyricBgLine), this.lyricLine.isDuet && this.element.classList.add(I$1.lyricDuetLine), this.lineTransforms.posY.setPosition(window.innerHeight * 2), this.element.appendChild(document.createElement("div")), this.element.appendChild(document.createElement("div")), this.element.appendChild(document.createElement("div"));
       let n2 = this.element.children[0], r2 = this.element.children[1], i2 = this.element.children[2];
-      n2.setAttribute("class", L$1.lyricMainLine), r2.setAttribute("class", L$1.lyricSubLine), i2.setAttribute("class", L$1.lyricSubLine), this.rebuildStyle();
+      n2.setAttribute("class", I$1.lyricMainLine), r2.setAttribute("class", I$1.lyricSubLine), i2.setAttribute("class", I$1.lyricSubLine), this.rebuildStyle();
     }
     listenersMap = /* @__PURE__ */ new Map();
     onMouseEvent = (e7) => {
@@ -43026,7 +43049,7 @@ void main(void)
     }
     isEnabled = false;
     async enable(e7 = this.lyricLine.startTime, t2 = true) {
-      this.isEnabled = true, this.element.classList.add(L$1.active);
+      this.isEnabled = true, this.element.classList.add(I$1.active);
       let n2 = this.element.children[0], r2 = Math.max(0, e7 - this.lyricLine.startTime), i2 = e7 === this.lyricLine.startTime ? this.lyricPlayer.getCurrentTime() : e7, a2 = Math.max(0, i2 - this.lyricLine.startTime);
       for (let e8 of this.splittedWords) {
         for (let n3 of e8.elementAnimations) {
@@ -43041,16 +43064,16 @@ void main(void)
           t2 && e9 < o2 ? n3.play() : n3.pause();
         }
       }
-      n2.classList.add(L$1.active);
+      n2.classList.add(I$1.active);
     }
     disable() {
-      this.isEnabled = false, this.element.classList.remove(L$1.active), this.renderMode = $$1.SOLID;
+      this.isEnabled = false, this.element.classList.remove(I$1.active), this.renderMode = $$1.SOLID;
       let e7 = this.element.children[0];
       for (let e8 of this.splittedWords) {
         for (let t2 of e8.elementAnimations) (t2.id === "float-word" || t2.id.includes("emphasize-word-float-only")) && (t2.playbackRate = -1, t2.play());
         for (let t2 of e8.maskAnimations) t2.pause();
       }
-      e7.classList.remove(L$1.active);
+      e7.classList.remove(I$1.active);
     }
     lastWord;
     async resume() {
@@ -43119,11 +43142,11 @@ void main(void)
           let n4 = document.createElement("span");
           n4.innerText = e8.word, n4.dataset.startTime = String(e8.startTime), n4.dataset.endTime = String(e8.endTime), t3.appendChild(n4);
         }
-        t3.classList.add(L$1.rubyWord), i2.classList.add(L$1.wordWithRuby), s2.classList.add(L$1.wordBody), i2.appendChild(t3), i2.appendChild(s2);
+        t3.classList.add(I$1.rubyWord), i2.classList.add(I$1.wordWithRuby), s2.classList.add(I$1.wordBody), i2.appendChild(t3), i2.appendChild(s2);
       }
       let c2 = this.lyricPlayer.processObsceneWord(e7);
       if (t2) {
-        i2.classList.add(L$1.emphasize);
+        i2.classList.add(I$1.emphasize);
         for (let { segment: e8 } of this.segmenter.segment(c2.trim())) {
           let t3 = document.createElement("span");
           t3.innerText = e8, a2.push(t3), s2.appendChild(t3);
@@ -43134,7 +43157,7 @@ void main(void)
       } else o2.length === 0 && (s2.innerText = c2.trim());
       if (r2) {
         let e8 = document.createElement("div");
-        e8.innerText = o2.length > 0 ? o2 : " ", e8.classList.add(L$1.romanWord), s2.appendChild(e8);
+        e8.innerText = o2.length > 0 ? o2 : " ", e8.classList.add(I$1.romanWord), s2.appendChild(e8);
       }
       return {
         ...e7,
@@ -43163,10 +43186,10 @@ void main(void)
         endTime: -Infinity,
         wordType: "normal",
         obscene: false
-      }), o2 = i2.some((e8) => K$1.shouldEmphasize(e8));
-      V$1(a2.word) || (o2 ||= K$1.shouldEmphasize(a2));
+      }), o2 = i2.some((e8) => G$1.shouldEmphasize(e8));
+      B$1(a2.word) || (o2 ||= G$1.shouldEmphasize(a2));
       let s2 = document.createElement("span");
-      s2.classList.add(L$1.emphasizeWrapper);
+      s2.classList.add(I$1.emphasizeWrapper);
       let c2 = [];
       for (let e8 of i2) {
         if (!e8.word.trim()) {
@@ -43202,8 +43225,8 @@ void main(void)
       u2 = u2 > 1 ? Math.sqrt(u2) : u2 ** 3, l2 *= 0.6, u2 *= 0.5, this.lyricLine.words.length > 0 && e7.word.includes(this.lyricLine.words[this.lyricLine.words.length - 1].word) && (l2 *= 1.6, u2 *= 1.5, o2 *= 1.2), l2 = Math.min(1.2, l2), u2 = Math.min(0.8, u2);
       let d2 = Number.isFinite(o2) ? o2 : 0, f2 = st$1(nt$1);
       return c2 = t2.flatMap((e8, t3, n3) => {
-        let r3 = a2 + o2 / 2.5 / s2 * t3, i3 = [], c3 = Array(Y).fill(0).map((e9, r4) => {
-          let i4 = (r4 + 1) / Y, a3 = f2(i4), o3 = f2(i4) * u2, s3 = $e$1(Qe$1(), 1 + a3 * 0.1 * l2), c4 = -a3 * 0.03 * l2 * (n3.length / 2 - t3), d3 = -a3 * 0.025 * l2;
+        let r3 = a2 + o2 / 2.5 / s2 * t3, i3 = [], c3 = Array(J$1).fill(0).map((e9, r4) => {
+          let i4 = (r4 + 1) / J$1, a3 = f2(i4), o3 = f2(i4) * u2, s3 = $e$1(Qe$1(), 1 + a3 * 0.1 * l2), c4 = -a3 * 0.03 * l2 * (n3.length / 2 - t3), d3 = -a3 * 0.025 * l2;
           return {
             offset: i4,
             transform: `${et$1(s3, 4)} translate(${c4}em, ${d3}em)`,
@@ -43220,8 +43243,8 @@ void main(void)
         p2.onfinish = () => {
           p2.pause();
         }, p2.pause(), i3.push(p2);
-        let m2 = Array(Y).fill(0).map((e9, t4) => {
-          let n4 = (t4 + 1) / Y, r4 = Math.sin(n4 * Math.PI);
+        let m2 = Array(J$1).fill(0).map((e9, t4) => {
+          let n4 = (t4 + 1) / J$1, r4 = Math.sin(n4 * Math.PI);
           return this.lyricLine.isBG && (r4 *= 2), {
             offset: n4,
             transform: `translateY(${-r4 * 0.05}em)`
@@ -43398,7 +43421,7 @@ void main(void)
     constructor(e7, t2, n2) {
       super(`line-${n2.type}`, n2), this.lineIndex = e7, this.line = t2;
     }
-  }, ft$1 = class ft extends G$1 {
+  }, ft$1 = class ft extends W$1 {
     currentLyricLineObjects = [];
     onResize() {
       let e7 = getComputedStyle(this.element);
@@ -43419,7 +43442,7 @@ void main(void)
       return this._baseFontSize;
     }
     constructor() {
-      super(), this.onResize(), this.element.classList.add("amll-lyric-player", "dom"), this.disableSpring && this.element.classList.add(L$1.disableSpring);
+      super(), this.onResize(), this.element.classList.add("amll-lyric-player", "dom"), this.disableSpring && this.element.classList.add(I$1.disableSpring);
     }
     rebuildStyle() {
     }
@@ -43428,7 +43451,7 @@ void main(void)
       for (let e8 of this.currentLyricLineObjects) e8.updateMaskImageSync();
     }
     setLyricLines(e7, t2 = 0) {
-      super.setLyricLines(e7, t2), this.hasDuetLine ? this.element.classList.add(L$1.hasDuetLine) : this.element.classList.remove(L$1.hasDuetLine), this.supportMaskImage || this.element.style.setProperty("--amll-player-time", `${t2}`);
+      super.setLyricLines(e7, t2), this.hasDuetLine ? this.element.classList.add(I$1.hasDuetLine) : this.element.classList.remove(I$1.hasDuetLine), this.supportMaskImage || this.element.style.setProperty("--amll-player-time", `${t2}`);
       for (let e8 of this.currentLyricLineObjects) e8.removeMouseEventListener("click", this.onLineClickedHandler), e8.removeMouseEventListener("contextmenu", this.onLineClickedHandler), e8.dispose();
       this.currentLyricLineObjects = this.processedLines.map((e8, t3) => {
         let n2 = new ut$1(this, e8);
@@ -43514,7 +43537,7 @@ void main(void)
       lineIndex: a2
     };
   }
-  function* gt$1(e7, t2, n2, r2 = 0) {
+  function* Y(e7, t2, n2, r2 = 0) {
     let i2 = {
       text: "",
       index: 0,
@@ -43526,7 +43549,7 @@ void main(void)
     for (let a2 of ht$1(e7, t2, n2, r2)) a2.lineIndex === i2.lineIndex ? (i2.text += a2.text, i2.width = a2.x + a2.width) : (i2.text.length && (yield i2), i2 = { ...a2 });
     i2.text.length && (yield i2);
   }
-  var _t$1 = class _t extends K$1 {
+  var gt$1 = class gt extends G$1 {
     constructor(e7, t2 = {
       words: [],
       translatedLyric: "",
@@ -43558,7 +43581,7 @@ void main(void)
       }, t2 = this.player.ctx;
       this.player.setFontSize(1);
       for (let e8 of Ze$1(this.line.words)) if (Array.isArray(e8) && e8.length === 0) continue;
-      this.layoutWords = [[...gt$1(t2, this.line.words.map((e8) => this.player.processObsceneWord(e8)).join(""), e7)]], this.player.setFontSize(0.5), this.translatedLayoutWords = [...gt$1(t2, this.line.translatedLyric, e7)], this.romanLayoutWords = [...gt$1(t2, this.line.romanLyric, e7)], this.measureSize(), this.lineCanvas.width = this.player.ctx.canvas.width, this.lineCanvas.height = this.lineSize[1] * devicePixelRatio;
+      this.layoutWords = [[...Y(t2, this.line.words.map((e8) => this.player.processObsceneWord(e8)).join(""), e7)]], this.player.setFontSize(0.5), this.translatedLayoutWords = [...Y(t2, this.line.translatedLyric, e7)], this.romanLayoutWords = [...Y(t2, this.line.romanLyric, e7)], this.measureSize(), this.lineCanvas.width = this.player.ctx.canvas.width, this.lineCanvas.height = this.lineSize[1] * devicePixelRatio;
       let n2 = this.lineCanvas.getContext("2d");
       n2.globalAlpha = 1, this.player.setFontSize(1), n2.font = t2.font, n2.scale(devicePixelRatio, devicePixelRatio), n2.fillStyle = "white", n2.textBaseline = "top", n2.textAlign = "left", n2.font = `${this.player.baseFontSize}px ${this.player.baseFontFamily}`;
       let r2 = 0;
@@ -43588,7 +43611,7 @@ void main(void)
       let t2 = this.player.ctx;
       t2.save(), t2.fillStyle = "white", t2.filter = `blur(${this.blur}px)`, t2.textRendering = "geometricPrecision", t2.globalAlpha = this.opacity, t2.translate(0, this.lineTransforms.posY.getCurrentPosition()), t2.scale(1 / devicePixelRatio, 1 / devicePixelRatio), this.lineCanvas.width * this.lineCanvas.height > 0 && t2.drawImage(this.lineCanvas, 0, 0), t2.restore();
     }
-  }, vt$1 = class vt extends G$1 {
+  }, _t$1 = class _t extends W$1 {
     canvasElement = document.createElement("canvas");
     currentLyricLineObjects = [];
     ctx = this.canvasElement.getContext("2d");
@@ -43605,7 +43628,7 @@ void main(void)
       }), this.element.appendChild(this.canvasElement), this.element.appendChild(this.interludeDots.getElement()), this.element.appendChild(this.bottomLine.getElement());
     }
     setLyricLines(e7, t2) {
-      super.setLyricLines(e7, t2), this.currentLyricLineObjects = this.processedLines.map((e8) => new _t$1(this, e8)), this.setLinePosYSpringParams({}), this.setLineScaleSpringParams({}), this.calcLayout(true);
+      super.setLyricLines(e7, t2), this.currentLyricLineObjects = this.processedLines.map((e8) => new gt$1(this, e8)), this.setLinePosYSpringParams({}), this.setLineScaleSpringParams({}), this.calcLayout(true);
     }
     onResize() {
       let e7 = getComputedStyle(this.element);
@@ -43626,7 +43649,7 @@ void main(void)
       t2.restore(), t2.font = `15px ${this.baseFontFamily}`, t2.fillStyle = "#FFFFFF55", t2.textAlign = "right", t2.fillText("CanvasLyricPlayer 播放器", n2 - 16, r2 - 16);
     }
   };
-  function yt$1(e7, t2 = 20) {
+  function vt$1(e7, t2 = 20) {
     let n2 = 0;
     return (...r2) => {
       clearTimeout(n2), n2 = setTimeout(() => e7(...r2), t2);
@@ -43646,7 +43669,7 @@ void main(void)
     lyricSubLine: "_lyricSubLine_7c08j_231",
     tmpDisableTransition: "_tmpDisableTransition_7c08j_319"
   };
-  function bt$1(e7) {
+  function yt$1(e7) {
     let t2 = [];
     function n2() {
       let r2 = t2[0];
@@ -43666,17 +43689,17 @@ void main(void)
       }), t2.length === 1 && n2();
     }));
   }
-  var Z$1 = 32, xt = (e7, t2) => (n2) => Math.min(1, Math.max(0, (n2 - e7) / (t2 - e7))), St$1 = 0.5, Ct$1 = xt(0, St$1), wt$1 = xt(St$1, 1), Tt$1 = J$1(0.2, 0.4, 0.58, 1), Et$1 = J$1(0.3, 0, 0.58, 1), Dt$1 = (e7) => (t2) => t2 < e7 ? Tt$1(Ct$1(t2)) : 1 - Et$1(wt$1(t2));
-  function Ot$1(e7, t2 = 0, n2 = "rgba(0,0,0,var(--bright-mask-alpha, 1.0))", r2 = "rgba(0,0,0,var(--dark-mask-alpha, 1.0))") {
+  var Z$1 = 32, bt$1 = (e7, t2) => (n2) => Math.min(1, Math.max(0, (n2 - e7) / (t2 - e7))), xt = 0.5, St$1 = bt$1(0, xt), Ct$1 = bt$1(xt, 1), wt$1 = q$1(0.2, 0.4, 0.58, 1), Tt$1 = q$1(0.3, 0, 0.58, 1), Et$1 = (e7) => (t2) => t2 < e7 ? wt$1(St$1(t2)) : 1 - Tt$1(Ct$1(t2));
+  function Dt$1(e7, t2 = 0, n2 = "rgba(0,0,0,var(--bright-mask-alpha, 1.0))", r2 = "rgba(0,0,0,var(--dark-mask-alpha, 1.0))") {
     let i2 = 2 + e7 + t2, a2 = e7 / i2, o2 = (1 - a2) / 2;
     return [`linear-gradient(to right,${n2} ${o2 * 100}%,${r2} ${(o2 + a2) * 100}%)`, i2];
   }
-  var kt$1 = class kt extends MouseEvent {
+  var Ot$1 = class Ot extends MouseEvent {
     constructor(e7, t2) {
       super(t2.type, t2), this.line = e7;
     }
   };
-  function At$1(e7) {
+  function kt$1(e7) {
     let t2 = e7.match(/matrix\(([^)]+)\)/);
     if (t2) {
       let e8 = t2[1].split(", ");
@@ -43684,7 +43707,7 @@ void main(void)
     }
     return 1;
   }
-  var jt$1 = class jt extends K$1 {
+  var At$1 = class At extends G$1 {
     element = document.createElement("div");
     splittedWords = [];
     lineSize = [0, 0];
@@ -43703,7 +43726,7 @@ void main(void)
     }
     listenersMap = /* @__PURE__ */ new Map();
     onMouseEvent = (e7) => {
-      let t2 = new kt$1(this, e7);
+      let t2 = new Ot$1(this, e7);
       for (let n2 of this.listenersMap.get(e7.type) ?? []) n2.call(this, t2);
       if (!this.dispatchEvent(t2) || t2.defaultPrevented) return e7.preventDefault(), e7.stopPropagation(), e7.stopImmediatePropagation(), false;
     };
@@ -43760,7 +43783,7 @@ void main(void)
       for (let e8 of this.splittedWords) for (let n2 of e8.maskAnimations) n2.currentTime = Math.min(this.totalDuration, Math.max(0, t2)), n2.playbackRate = 1, t2 >= 0 && t2 < this.totalDuration ? n2.play() : n2.pause();
     }
     measureLockMark = false;
-    measureLock = bt$1(async (e7) => {
+    measureLock = yt$1(async (e7) => {
       this.measureLockMark ||= (this.measureLockMark = true, await e7(), false);
     });
     getLine() {
@@ -43823,7 +43846,7 @@ void main(void)
           endTime: -Infinity,
           wordType: "normal",
           obscene: false
-        }), r3 = t3.map((e8) => K$1.shouldEmphasize(e8)).reduce((e8, t4) => e8 || t4, K$1.shouldEmphasize(n3)), o2 = document.createElement("span");
+        }), r3 = t3.map((e8) => G$1.shouldEmphasize(e8)).reduce((e8, t4) => e8 || t4, G$1.shouldEmphasize(n3)), o2 = document.createElement("span");
         o2.classList.add(X$1.emphasizeWrapper);
         let s2 = [];
         for (let e8 of t3) {
@@ -43840,10 +43863,10 @@ void main(void)
             shouldEmphasize: r3
           }), o2.appendChild(t4);
         }
-        r3 && this.splittedWords[this.splittedWords.length - 1].elementAnimations.push(...this.initEmphasizeAnimation(n3, s2, n3.endTime - n3.startTime, n3.startTime - this.lyricLine.startTime)), n3.word.trimStart() !== n3.word && e7.appendChild(document.createTextNode(" ")), e7.appendChild(o2), n3.word.trimEnd() !== n3.word && K$1.shouldEmphasize(n3) && e7.appendChild(document.createTextNode(" "));
+        r3 && this.splittedWords[this.splittedWords.length - 1].elementAnimations.push(...this.initEmphasizeAnimation(n3, s2, n3.endTime - n3.startTime, n3.startTime - this.lyricLine.startTime)), n3.word.trimStart() !== n3.word && e7.appendChild(document.createTextNode(" ")), e7.appendChild(o2), n3.word.trimEnd() !== n3.word && G$1.shouldEmphasize(n3) && e7.appendChild(document.createTextNode(" "));
       } else if (t3.word.trim().length === 0) e7.appendChild(document.createTextNode(" "));
       else {
-        let n3 = K$1.shouldEmphasize(t3), { mainWordEl: r3, subElements: o2 } = this.buildWordElement(t3, n3, i2, a2, this.lyricPlayer.processObsceneWord(t3).trim()), s2 = {
+        let n3 = G$1.shouldEmphasize(t3), { mainWordEl: r3, subElements: o2 } = this.buildWordElement(t3, n3, i2, a2, this.lyricPlayer.processObsceneWord(t3).trim()), s2 = {
           ...t3,
           mainElement: r3,
           subElements: o2,
@@ -43867,7 +43890,7 @@ void main(void)
       s2 = s2 > 1 ? Math.sqrt(s2) : s2 ** 3;
       let c2 = a2 / 3e3;
       c2 = c2 > 1 ? Math.sqrt(c2) : c2 ** 3, s2 *= 0.6, c2 *= 0.5, this.lyricLine.words.length > 0 && e7.word.includes(this.lyricLine.words[this.lyricLine.words.length - 1].word) && (s2 *= 1.6, c2 *= 1.5, a2 *= 1.2), s2 = Math.min(1.2, s2), c2 = Math.min(0.8, c2);
-      let l2 = Number.isFinite(a2) ? a2 : 0, u2 = Dt$1(St$1);
+      let l2 = Number.isFinite(a2) ? a2 : 0, u2 = Et$1(xt);
       return o2 = t2.flatMap((e8, t3, n3) => {
         let r3 = i2 + a2 / 2.5 / n3.length * t3, o3 = [], d2 = Array(Z$1).fill(0).map((e9, r4) => {
           let i3 = (r4 + 1) / Z$1, a3 = u2(i3), o4 = u2(i3) * c2, l3 = $e$1(Qe$1(), 1 + a3 * 0.1 * s2), d3 = -a3 * 0.03 * s2 * (n3.length / 2 - t3), f3 = -a3 * 0.025 * s2;
@@ -43948,7 +43971,7 @@ void main(void)
         let t2 = e7.mainElement;
         if (t2) {
           e7.width = t2.clientWidth, e7.height = t2.clientHeight;
-          let n2 = e7.height * this.lyricPlayer.getWordFadeWidth(), [r2, i2] = Ot$1(n2 / e7.width), a2 = `${i2 * 100}% 100%`;
+          let n2 = e7.height * this.lyricPlayer.getWordFadeWidth(), [r2, i2] = Dt$1(n2 / e7.width), a2 = `${i2 * 100}% 100%`;
           this.lyricPlayer.supportMaskImage ? (t2.style.maskImage = r2, t2.style.maskRepeat = "no-repeat", t2.style.maskOrigin = "left", t2.style.maskSize = a2) : (t2.style.webkitMaskImage = r2, t2.style.webkitMaskRepeat = "no-repeat", t2.style.webkitMaskOrigin = "left", t2.style.webkitMaskSize = a2);
           let o2 = e7.width + n2, s2 = `clamp(${-o2}px,calc(${-o2}px + (var(--amll-player-time) - ${e7.startTime})*${o2 / Math.abs(e7.endTime - e7.startTime)}px),0px) 0px, left top`;
           t2.style.maskPosition = s2, t2.style.webkitMaskPosition = s2;
@@ -43960,7 +43983,7 @@ void main(void)
       this.splittedWords.forEach((t2, n2) => {
         let r2 = t2.mainElement;
         if (r2) {
-          let i2 = t2.height * this.lyricPlayer.getWordFadeWidth(), [a2, o2] = Ot$1(i2 / (t2.width + t2.padding * 2)), s2 = `${o2 * 100}% 100%`;
+          let i2 = t2.height * this.lyricPlayer.getWordFadeWidth(), [a2, o2] = Dt$1(i2 / (t2.width + t2.padding * 2)), s2 = `${o2 * 100}% 100%`;
           this.lyricPlayer.supportMaskImage ? (r2.style.maskImage = a2, r2.style.maskRepeat = "no-repeat", r2.style.maskOrigin = "left", r2.style.maskSize = s2) : (r2.style.webkitMaskImage = a2, r2.style.webkitMaskRepeat = "no-repeat", r2.style.webkitMaskOrigin = "left", r2.style.webkitMaskSize = s2);
           let c2 = this.splittedWords.slice(0, n2).reduce((e8, t3) => e8 + t3.width, 0) + (this.splittedWords[0] ? i2 : 0), l2 = -(t2.width + t2.padding * 2 + i2), u2 = (e8) => Math.max(l2, Math.min(0, e8)), d2 = -c2 - t2.width - t2.padding - i2, f2 = 0, p2 = [], m2 = d2, h2 = 0, g2 = () => {
             let e8 = d2 - m2, t3 = Math.max(0, Math.min(1, f2)), n3 = t3 - h2, r3 = Math.abs(n3 / e8);
@@ -44042,7 +44065,7 @@ void main(void)
     update(e7 = 0) {
       if (this.lyricPlayer.getEnableSpring()) if (this.lineTransforms.posY.update(e7), this.lineTransforms.scale.update(e7), this.isInSight ? (this.show(), this.maskImageDirty && this.updateMaskImage()) : this.hide(), this.lyricPlayer.getEnableSpring()) this.element.style.setProperty("--bright-mask-alpha", `${Math.max(0, Math.min(1, this.lineTransforms.scale.getCurrentPosition() / 100 - 0.97) / 0.03) * 0.8 + 0.2}`), this.element.style.setProperty("--dark-mask-alpha", `${Math.max(0, Math.min(1, this.lineTransforms.scale.getCurrentPosition() / 100 - 0.97) / 0.03) * 0.2 + 0.2}`);
       else {
-        let e8 = window.getComputedStyle(this.element).transform, t2 = At$1(e8);
+        let e8 = window.getComputedStyle(this.element).transform, t2 = kt$1(e8);
         this.element.style.setProperty("--bright-mask-alpha", `${Math.max(0, Math.min(1, (t2 - 0.97) / 0.03)) * 0.8 + 0.2}`), this.element.style.setProperty("--dark-mask-alpha", `${Math.max(0, Math.min(1, (t2 - 0.97) / 0.03)) * 0.2 + 0.2}`);
       }
     }
@@ -44065,9 +44088,9 @@ void main(void)
     dispose() {
       this.disposeElements(), this.element.remove();
     }
-  }, Mt$1 = class Mt extends G$1 {
+  }, jt$1 = class jt extends W$1 {
     currentLyricLineObjects = [];
-    debounceCalcLayout = yt$1(() => this.calcLayout(true).then(() => this.currentLyricLineObjects.map(async (e7, t2) => {
+    debounceCalcLayout = vt$1(() => this.calcLayout(true).then(() => this.currentLyricLineObjects.map(async (e7, t2) => {
       e7.markMaskImageDirty("DomLyricPlayer onResize"), await e7.waitMaskImageUpdated(), this.hotLines.has(t2) && (e7.enable(this.currentTime), e7.resume());
     })), 1e3);
     onResize() {
@@ -44105,7 +44128,7 @@ void main(void)
       super.setLyricLines(e7, t2), this.hasDuetLine ? this.element.classList.add(X$1.hasDuetLine) : this.element.classList.remove(X$1.hasDuetLine);
       for (let e8 of this.currentLyricLineObjects) e8.removeMouseEventListener("click", this.onLineClickedHandler), e8.removeMouseEventListener("contextmenu", this.onLineClickedHandler), e8.dispose();
       this.currentLyricLineObjects = this.processedLines.map((e8, t3) => {
-        let n2 = new jt$1(this, e8);
+        let n2 = new At$1(this, e8);
         return n2.addMouseEventListener("click", this.onLineClickedHandler), n2.addMouseEventListener("contextmenu", this.onLineClickedHandler), this.element.appendChild(n2.getElement()), this.lyricLinesIndexes.set(n2, t3), n2.markMaskImageDirty("DomLyricPlayer setLyricLines"), n2;
       }), this.setLinePosXSpringParams({}), this.setLinePosYSpringParams({}), this.setLineScaleSpringParams({}), this.calcLayout(true).then(() => {
         this.initialLayoutFinished = true;
@@ -44157,9 +44180,9 @@ void main(void)
   })($$1 || {});
   var reactDomExports = requireReactDom();
   var _ = reactExports.forwardRef(({ album: t2, albumIsVideo: n2, fps: r2, playing: i2, flowSpeed: o2, renderScale: s2, staticMode: u2, lowFreqVolume: f2, hasLyric: p2, renderer: h2, style: g2, ..._2 }, v2) => {
-    let y2 = reactExports.useRef(null), b2 = reactExports.useRef(null), x2 = reactExports.useRef(null), S2 = h2 ?? de$1;
+    let y2 = reactExports.useRef(null), b2 = reactExports.useRef(null), x2 = reactExports.useRef(null), S2 = h2 ?? fe$1;
     return reactExports.useEffect(() => {
-      (x2.current !== S2 || y2.current === void 0) && (x2.current = S2, y2.current?.dispose(), y2.current = me$1.new(S2));
+      (x2.current !== S2 || y2.current === void 0) && (x2.current = S2, y2.current?.dispose(), y2.current = he$1.new(S2));
     }, [S2]), reactExports.useEffect(() => {
       S2 && t2 && y2.current?.setAlbum(t2, n2);
     }, [
@@ -51029,9 +51052,9 @@ void main(void)
     }), /* @__PURE__ */ jsxRuntimeExports.jsx(Kf, { onClick: a2 })]
   }));
   reactExports.forwardRef(({ album: e2, albumIsVideo: t2, fps: n2, playing: r2, flowSpeed: i2, renderScale: a2, staticMode: o2, lowFreqVolume: s2, hasLyric: c2, renderer: l2, style: u2, ...d2 }, p2) => {
-    let h2 = reactExports.useRef(null), g2 = reactExports.useRef(null), _2 = reactExports.useRef(null), y2 = l2 ?? de$1;
+    let h2 = reactExports.useRef(null), g2 = reactExports.useRef(null), _2 = reactExports.useRef(null), y2 = l2 ?? fe$1;
     return reactExports.useEffect(() => {
-      (_2.current !== y2 || h2.current === void 0) && (_2.current = y2, h2.current?.dispose(), h2.current = me$1.new(y2));
+      (_2.current !== y2 || h2.current === void 0) && (_2.current = y2, h2.current?.dispose(), h2.current = he$1.new(y2));
     }, [y2]), reactExports.useEffect(() => {
       y2 && e2 && h2.current?.setAlbum(e2, t2);
     }, [
@@ -51593,9 +51616,9 @@ void main(void)
   atom((() => {
     switch (localStorage.getItem("amll-react-full.lyricPlayerImplementation")) {
       case Rm.DomSlim:
-        return { lyricPlayer: Mt$1 };
+        return { lyricPlayer: jt$1 };
       case Rm.Canvas:
-        return { lyricPlayer: vt$1 };
+        return { lyricPlayer: _t$1 };
       default:
         return { lyricPlayer: ft$1 };
     }
@@ -51620,11 +51643,11 @@ void main(void)
   atom((() => {
     switch (localStorage.getItem("amll-react-full.lyricBackgroundRenderer")) {
       case "pixi":
-        return { renderer: pe$1 };
+        return { renderer: me$1 };
       case "css-bg":
         return { renderer: "css-bg" };
       default:
-        return { renderer: de$1 };
+        return { renderer: fe$1 };
     }
   })());
   Q("amll-player.cssBackgroundProperty", "#111111");
@@ -52049,9 +52072,95 @@ void main(void)
     }
     return void 0;
   }
+  const FALLBACK_WORD_DURATION_MS = 180;
+  const FALLBACK_LINE_DURATION_MS = 600;
+  function toFiniteOr(value, fallback) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : fallback;
+  }
+  function sanitizeLyricTimings(lines, source) {
+    if (!Array.isArray(lines) || lines.length === 0) return [];
+    const indexed = lines.map((rawLine, originalIndex) => ({
+      originalIndex,
+      line: {
+        ...rawLine,
+        startTime: toFiniteOr(rawLine.startTime, 0),
+        endTime: toFiniteOr(rawLine.endTime, 0),
+        words: (Array.isArray(rawLine.words) ? rawLine.words : []).map((rawWord) => ({
+          word: String(rawWord.word ?? ""),
+          startTime: toFiniteOr(rawWord.startTime, toFiniteOr(rawLine.startTime, 0)),
+          endTime: toFiniteOr(rawWord.endTime, toFiniteOr(rawLine.endTime, toFiniteOr(rawLine.startTime, 0)))
+        }))
+      }
+    })).sort((a2, b2) => {
+      if (a2.line.startTime === b2.line.startTime) {
+        return a2.originalIndex - b2.originalIndex;
+      }
+      return a2.line.startTime - b2.line.startTime;
+    });
+    indexed.forEach(({ line }, lineIndex) => {
+      const nextLineStart = indexed[lineIndex + 1]?.line.startTime;
+      line.words.forEach((word, wordIndex) => {
+        if (word.endTime > word.startTime) return;
+        const nextWordStart = line.words[wordIndex + 1]?.startTime;
+        let repairedEnd = word.startTime + FALLBACK_WORD_DURATION_MS;
+        if (nextWordStart !== void 0 && nextWordStart > word.startTime) {
+          repairedEnd = nextWordStart;
+        } else if (nextLineStart !== void 0 && nextLineStart > word.startTime) {
+          repairedEnd = nextLineStart;
+        }
+        logToAndroid(
+          `[TimingSanitizer][${source}] fixed word timing line=${lineIndex} word=${wordIndex} ${word.startTime}-${word.endTime} -> ${word.startTime}-${repairedEnd}`,
+          "debug"
+        );
+        word.endTime = repairedEnd;
+      });
+      if (line.words.length > 0) {
+        let minStart = Number.POSITIVE_INFINITY;
+        let maxEnd = 0;
+        line.words.forEach((word) => {
+          minStart = Math.min(minStart, word.startTime);
+          maxEnd = Math.max(maxEnd, word.endTime);
+        });
+        if (Number.isFinite(minStart)) {
+          line.startTime = minStart;
+        }
+        line.endTime = maxEnd;
+      }
+      if (line.endTime > line.startTime) return;
+      let repairedLineEnd = line.startTime + FALLBACK_LINE_DURATION_MS;
+      if (nextLineStart !== void 0 && nextLineStart > line.startTime) {
+        repairedLineEnd = nextLineStart;
+      }
+      const linePreview = line.words.map((word) => word.word).join("").slice(0, 32);
+      logToAndroid(
+        `[TimingSanitizer][${source}] fixed line timing line=${lineIndex} ${line.startTime}-${line.endTime} -> ${line.startTime}-${repairedLineEnd}, text="${linePreview}"`,
+        "debug"
+      );
+      line.endTime = repairedLineEnd;
+    });
+    for (let i2 = 0; i2 < indexed.length - 1; i2++) {
+      const cur = indexed[i2].line;
+      const next = indexed[i2 + 1].line;
+      if (cur.endTime <= next.startTime) continue;
+      const overlappedEnd = next.startTime;
+      logToAndroid(
+        `[TimingSanitizer][${source}] trimmed overlap line=${i2} ${cur.startTime}-${cur.endTime} -> ${cur.startTime}-${overlappedEnd}`,
+        "debug"
+      );
+      cur.endTime = overlappedEnd;
+      if (cur.words.length > 0) {
+        const lastWord = cur.words[cur.words.length - 1];
+        if (lastWord.endTime > overlappedEnd) {
+          lastWord.endTime = overlappedEnd;
+        }
+      }
+    }
+    return indexed.map(({ line }) => line);
+  }
   function normalizeLyricLines(lines) {
     if (!Array.isArray(lines)) return [];
-    return lines.map((line) => {
+    const normalized = lines.map((line) => {
       const words = line.words?.map((w2) => ({
         word: String(w2.word ?? ""),
         startTime: Number(w2.startTime ?? line.startTime ?? 0),
@@ -52074,6 +52183,7 @@ void main(void)
         isDuet: !!line.isDuet
       };
     });
+    return sanitizeLyricTimings(normalized, "bridge");
   }
   function normalizeTtmlLyricLines(ttml) {
     const parsed = l(ttml);
@@ -52103,7 +52213,7 @@ void main(void)
       };
     });
     return {
-      normalizedLines,
+      normalizedLines: sanitizeLyricTimings(normalizedLines, "ttml"),
       parsedKeys: Object.keys(parsed)
     };
   }
@@ -52200,8 +52310,13 @@ void main(void)
         authorityAtRef.current = getMonotonicTime();
         currentTimeRef.current = parsedTime;
         setCurrentTime(parsedTime);
+        const seekNow = isSeekingRef.current;
         if (playerRef.current?.lyricPlayer) {
-          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), isSeekingRef.current);
+          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), seekNow);
+        }
+        if (seekNow) {
+          isSeekingRef.current = false;
+          setIsSeeking(false);
         }
       };
       window.updateAlbumArt = async function(uri2) {
@@ -52317,7 +52432,7 @@ void main(void)
         const progressed = isPlayingRef.current ? base + (now - authorityAtRef.current) : base;
         currentTimeRef.current = progressed;
         if (playerRef.current?.lyricPlayer) {
-          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), isSeekingRef.current);
+          playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), false);
         }
         timeRafRef.current = requestAnimationFrame(tick);
       };
@@ -52354,7 +52469,7 @@ void main(void)
         logToAndroid(`line-click handler error: ${error.message}`, "error");
       }
     };
-    const backgroundRenderer = backgroundConfig.renderer === "mesh" ? de$1 : pe$1;
+    const backgroundRenderer = backgroundConfig.renderer === "mesh" ? fe$1 : me$1;
     return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { id: "app", style: { position: "relative", width: "100%", height: "100vh" }, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         _,
@@ -52381,7 +52496,7 @@ void main(void)
         v,
         {
           ref: playerRef,
-          lyricPlayer: renderMode === "dom-lite" ? Mt$1 : void 0,
+          lyricPlayer: renderMode === "dom-lite" ? jt$1 : void 0,
           lyricLines,
           currentTime,
           playing: musicIsPlaying,

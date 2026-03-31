@@ -204,10 +204,116 @@ function parseBackgroundRenderer(value: unknown): BackgroundRendererKey | undefi
   return undefined
 }
 
+const FALLBACK_WORD_DURATION_MS = 180
+const FALLBACK_LINE_DURATION_MS = 600
+
+function toFiniteOr(value: unknown, fallback: number): number {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed : fallback
+}
+
+function sanitizeLyricTimings(lines: LyricLine[], source: string): LyricLine[] {
+  if (!Array.isArray(lines) || lines.length === 0) return []
+
+  const indexed = lines
+    .map((rawLine, originalIndex) => ({
+      originalIndex,
+      line: {
+        ...rawLine,
+        startTime: toFiniteOr(rawLine.startTime, 0),
+        endTime: toFiniteOr(rawLine.endTime, 0),
+        words: (Array.isArray(rawLine.words) ? rawLine.words : []).map((rawWord) => ({
+          word: String(rawWord.word ?? ''),
+          startTime: toFiniteOr(rawWord.startTime, toFiniteOr(rawLine.startTime, 0)),
+          endTime: toFiniteOr(rawWord.endTime, toFiniteOr(rawLine.endTime, toFiniteOr(rawLine.startTime, 0))),
+        })),
+      },
+    }))
+    .sort((a, b) => {
+      if (a.line.startTime === b.line.startTime) {
+        return a.originalIndex - b.originalIndex
+      }
+      return a.line.startTime - b.line.startTime
+    })
+
+  indexed.forEach(({ line }, lineIndex) => {
+    const nextLineStart = indexed[lineIndex + 1]?.line.startTime
+
+    line.words.forEach((word, wordIndex) => {
+      if (word.endTime > word.startTime) return
+
+      const nextWordStart = line.words[wordIndex + 1]?.startTime
+      let repairedEnd = word.startTime + FALLBACK_WORD_DURATION_MS
+      if (nextWordStart !== undefined && nextWordStart > word.startTime) {
+        repairedEnd = nextWordStart
+      } else if (nextLineStart !== undefined && nextLineStart > word.startTime) {
+        repairedEnd = nextLineStart
+      }
+
+      logToAndroid(
+        `[TimingSanitizer][${source}] fixed word timing line=${lineIndex} word=${wordIndex} ${word.startTime}-${word.endTime} -> ${word.startTime}-${repairedEnd}`,
+        'debug',
+      )
+      word.endTime = repairedEnd
+    })
+
+    if (line.words.length > 0) {
+      let minStart = Number.POSITIVE_INFINITY
+      let maxEnd = 0
+      line.words.forEach((word) => {
+        minStart = Math.min(minStart, word.startTime)
+        maxEnd = Math.max(maxEnd, word.endTime)
+      })
+      if (Number.isFinite(minStart)) {
+        line.startTime = minStart
+      }
+      line.endTime = maxEnd
+    }
+
+    if (line.endTime > line.startTime) return
+
+    let repairedLineEnd = line.startTime + FALLBACK_LINE_DURATION_MS
+    if (nextLineStart !== undefined && nextLineStart > line.startTime) {
+      repairedLineEnd = nextLineStart
+    }
+
+    const linePreview = line.words
+      .map((word) => word.word)
+      .join('')
+      .slice(0, 32)
+    logToAndroid(
+      `[TimingSanitizer][${source}] fixed line timing line=${lineIndex} ${line.startTime}-${line.endTime} -> ${line.startTime}-${repairedLineEnd}, text="${linePreview}"`,
+      'debug',
+    )
+    line.endTime = repairedLineEnd
+  })
+
+  for (let i = 0; i < indexed.length - 1; i++) {
+    const cur = indexed[i].line
+    const next = indexed[i + 1].line
+    if (cur.endTime <= next.startTime) continue
+
+    const overlappedEnd = next.startTime
+    logToAndroid(
+      `[TimingSanitizer][${source}] trimmed overlap line=${i} ${cur.startTime}-${cur.endTime} -> ${cur.startTime}-${overlappedEnd}`,
+      'debug',
+    )
+    cur.endTime = overlappedEnd
+    if (cur.words.length > 0) {
+      const lastWord = cur.words[cur.words.length - 1]
+      if (lastWord.endTime > overlappedEnd) {
+        lastWord.endTime = overlappedEnd
+      }
+    }
+  }
+
+  return indexed.map(({ line }) => line)
+}
+
 function normalizeLyricLines(lines: any[]): LyricLine[] {
   if (!Array.isArray(lines)) return []
   
-  return lines.map((line) => {
+  const normalized = lines.map((line) => {
     const words = line.words?.map((w: any) => ({
       word: String(w.word ?? ''),
       startTime: Number(w.startTime ?? line.startTime ?? 0),
@@ -232,6 +338,7 @@ function normalizeLyricLines(lines: any[]): LyricLine[] {
       isDuet: !!line.isDuet,
     }
   })
+  return sanitizeLyricTimings(normalized, 'bridge')
 }
 
 function normalizeTtmlLyricLines(ttml: string): NormalizedTtmlResult {
@@ -272,7 +379,7 @@ function normalizeTtmlLyricLines(ttml: string): NormalizedTtmlResult {
   })
 
   return {
-    normalizedLines,
+    normalizedLines: sanitizeLyricTimings(normalizedLines, 'ttml'),
     parsedKeys: Object.keys(parsed as unknown as Record<string, unknown>),
   }
 }
@@ -394,9 +501,14 @@ function App() {
       authorityAtRef.current = getMonotonicTime()
       currentTimeRef.current = parsedTime
       setCurrentTime(parsedTime)
+      const seekNow = isSeekingRef.current
       // Keep the core player in sync immediately, not just through React state.
       if (playerRef.current?.lyricPlayer) {
-        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), isSeekingRef.current)
+        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), seekNow)
+      }
+      if (seekNow) {
+        isSeekingRef.current = false
+        setIsSeeking(false)
       }
     }
 
@@ -534,7 +646,7 @@ function App() {
       currentTimeRef.current = progressed
 
       if (playerRef.current?.lyricPlayer) {
-        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), isSeekingRef.current)
+        playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(progressed), false)
       }
 
       timeRafRef.current = requestAnimationFrame(tick)

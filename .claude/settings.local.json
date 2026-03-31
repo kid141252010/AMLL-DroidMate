@@ -4,7 +4,9 @@
       "Read(//e/АMLL-DrоidMаtе/frontend/**)",
       "Read(//e/АMLL-DrоidMаtе/**)",
       "Bash(grep -E \"\\\\.\\(kt|xml\\)$\")",
-      "Bash(xargs -I {} basename {})"
+      "Bash(xargs -I {} basename {})",
+      "Bash(xargs grep:*)",
+      "Bash(find /e/AMLL-DroidMate/app/src/main -type f -name \"*.kt\" -exec grep -l \"lyric\\\\|subtitle\\\\|line\\\\|karaoke\" {})"
     ]
   }
 }
