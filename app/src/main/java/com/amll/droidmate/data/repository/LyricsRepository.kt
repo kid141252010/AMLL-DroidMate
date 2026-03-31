@@ -1715,9 +1715,12 @@ open class LyricsRepository(
         // which is the typical Unilyric format, so split on
         // "::" first to avoid producing an empty string for the second part.
         val candidateIds = when {
-            platform == "qq" && normalizedId.contains("::") -> normalizedId.split("::", limit = 2)
+            platform == "qq" && normalizedId.contains("::") ->
+                normalizedId.split("::").filter { it.isNotBlank() }
+            platform == "qq" && normalizedId.contains(":") ->
+                normalizedId.split(":").filter { it.isNotBlank() }
             else -> listOf(normalizedId)
-        }
+        }.ifEmpty { listOf(normalizedId) }
 
         var unknownHostCount = 0
         var totalEndpoints = 0
@@ -1733,7 +1736,8 @@ open class LyricsRepository(
             } else {
                 // For the main AMLL endpoint we should use the raw ID as provided.
                 // (some platforms like raw-lyrics include the .ttml suffix in the ID)
-                endpoints += "https://amll-ttml-db.stevexmh.net/$platform/$rawId"
+                val primaryId = if (candidateIds.size > 1) normalizedSongId else rawId
+                endpoints += "https://amll-ttml-db.stevexmh.net/$platform/$primaryId"
 
                 // Mirror endpoints exist for multiple platforms (not just `ncm`).
                 // Determine the mirror folder name:
@@ -1977,11 +1981,9 @@ open class LyricsRepository(
             Timber.i("Auto-fetching lyrics for: $title - $artist")
 
             // check local cached lyrics first
-            cacheRepo?.let {
-                getCachedLyrics(title, artist)?.let { cachedResult ->
-                    Timber.i("Returning lyrics from local cache: ${cachedResult.source}")
-                    return cachedResult
-                }
+            getCachedLyrics(title, artist)?.let { cachedResult ->
+                Timber.i("Returning lyrics from local cache: ${cachedResult.source}")
+                return cachedResult
             }
 
             var searchResults = searchLyrics(title, artist)
@@ -2237,21 +2239,9 @@ open class LyricsRepository(
         if (lines.any { it.isBG }) features.add(LyricsFeature.BACKGROUND)
         if (lines.any { it.translation?.isNotBlank() == true }) features.add(LyricsFeature.TRANSLATION)
         if (lines.any { it.transliteration?.isNotBlank() == true }) features.add(LyricsFeature.TRANSLITERATION)
-        // treat 'words' feature as present only if there is at least one line
-        // with more than one word, or the single word does not exactly match the
-        // line timing.  This prevents ordinary "line‑timed" lyrics from being
-        // flagged as word‑level.
-        val hasRealWords = lines.any { line ->
-            val w = line.words
-            if (w.isEmpty()) return@any false
-            // if there is only one word and its timing equals the line's timing,
-            // that's just a line marker, not a true word-level transcript.
-            if (w.size == 1 && w[0].startTime == line.startTime && w[0].endTime == line.endTime) {
-                false
-            } else {
-                true
-            }
-        }
+        // treat explicit word list as word-level capability.
+        // line-only TTML/LRC usually has empty `words`, so this still avoids false positives.
+        val hasRealWords = lines.any { it.words.isNotEmpty() }
         if (hasRealWords) features.add(LyricsFeature.WORDS)
         // Only mark overlap as a feature for sources where it is expected to be
         // meaningful (e.g. AMLL TTML DB results or a raw TTML file). Other sources
@@ -2311,17 +2301,21 @@ open class LyricsRepository(
         ): TTMLLyrics? {
             return try {
                 Timber.d("[BG-LYRICS-DEBUG] LyricsRepository.parseTTML input: length=${ttmlContent.length}, hasXbg=${ttmlContent.contains("ttm:role=\"x-bg\"")}, hasXTranslation=${ttmlContent.contains("ttm:role=\"x-translation\"")}")
-                val lines = TTMLParser.parse(ttmlContent)
+                val parsed = TTMLParser.parseWithSongParts(ttmlContent)
+                val lines = parsed.lines
                 val bgLines = lines.filter { it.isBG }
                 val bgWithTranslation = bgLines.count { !it.translation.isNullOrBlank() }
                 val sampleBg = bgLines.firstOrNull()
-                Timber.d("[BG-LYRICS-DEBUG] LyricsRepository.parseTTML output: total=${lines.size}, bg=${bgLines.size}, bgWithTrans=$bgWithTranslation, sampleBg='${sampleBg?.text?.take(40) ?: ""}', sampleTrans='${sampleBg?.translation?.take(40) ?: ""}'")
+                Timber.d(
+                    "[BG-LYRICS-DEBUG] LyricsRepository.parseTTML output: total=${lines.size}, bg=${bgLines.size}, bgWithTrans=$bgWithTranslation, songParts=${parsed.songParts.size}, sampleBg='${sampleBg?.text?.take(40) ?: ""}', sampleTrans='${sampleBg?.translation?.take(40) ?: ""}'"
+                )
                 TTMLLyrics(
                     metadata = TTMLMetadata(
                         title = title ?: "Unknown",
                         artist = artist ?: "Unknown"
                     ),
-                    lines = lines.sortedBy { it.startTime }
+                    lines = lines.sortedBy { it.startTime },
+                    songParts = parsed.songParts
                 )
             } catch (e: Exception) {
                 Timber.e(e, "Error parsing TTML")

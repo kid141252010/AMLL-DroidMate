@@ -1,4 +1,4 @@
-package com.amll.droidmate.ui.viewmodel
+﻿package com.amll.droidmate.ui.viewmodel
 
 
 
@@ -14,10 +14,14 @@ import com.amll.droidmate.domain.model.LyricsSearchResult
 import com.amll.droidmate.ui.AppSettings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import timber.log.Timber
+import kotlin.math.abs
+import kotlin.coroutines.EmptyCoroutineContext
 
 data class CustomLyricsCandidate(
     val provider: String,
@@ -45,8 +49,8 @@ data class CustomLyricsCandidate(
 
 class CustomLyricsViewModel @JvmOverloads constructor(
     application: Application,
-    private val lyricsRepository: LyricsRepository = ServiceLocator.provideLyricsRepository(application.applicationContext),
-    private val lyricsCacheRepository: LyricsCacheRepository = ServiceLocator.provideLyricsCacheRepository(application.applicationContext)
+    private val lyricsRepository: LyricsRepository = ServiceLocator.provideLyricsRepository(application),
+    private val lyricsCacheRepository: LyricsCacheRepository = ServiceLocator.provideLyricsCacheRepository(application)
 ) : AndroidViewModel(application) {
 
     // 当前歌曲唯一标识（title + artist）
@@ -66,8 +70,13 @@ class CustomLyricsViewModel @JvmOverloads constructor(
         "qqmusic" to 3
     )
 
-    // HTTP client from ServiceLocator (can be overridden in tests)
-    private val httpClient = ServiceLocator.provideHttpClient(application.applicationContext)
+    private val launchDispatcher: CoroutineDispatcher = runCatching {
+        val mainDispatcher = Dispatchers.Main.immediate
+        mainDispatcher.dispatch(EmptyCoroutineContext, Runnable { })
+        mainDispatcher
+    }.getOrElse {
+        Dispatchers.Unconfined
+    }
 
     // 当前正在播放的来源名称
     private var currentSourceName: String? = null
@@ -98,7 +107,7 @@ class CustomLyricsViewModel @JvmOverloads constructor(
 
         // 2. confidence + features
         val confDiff = a.confidence - b.confidence
-        if (confDiff != 0f) {
+        if (abs(confDiff) > CONFIDENCE_THRESHOLD) {
             val res = -confDiff.compareTo(0f)
             Timber.d("compareCandidates confidence: $a vs $b -> $res (diff=$confDiff)")
             return res
@@ -129,33 +138,26 @@ class CustomLyricsViewModel @JvmOverloads constructor(
             }
         }
 
-// 4. current source bias (favor candidates from the same source app)
-            currentSourceName?.let { source ->
-                val lower = source.lowercase()
-
-                // If user is playing from QQ/QQ音乐, prefer QQ candidates first.
-                // If playing from 酷狗, prefer Kugou candidates first.
-                // If the source string mentions both, prefer QQ then Kugou.
-                val preferredProviders = when {
-                    lower.contains("qq") && !lower.contains("酷狗") -> setOf("qq", "qqmusic")
-                    lower.contains("酷狗") && !lower.contains("qq") -> setOf("kugou")
-                    lower.contains("qq") && lower.contains("酷狗") -> setOf("qq", "qqmusic", "kugou")
-                    lower.contains("网易") -> setOf("netease", "ncm")
-                    else -> emptySet()
-                }
-
-                if (preferredProviders.isNotEmpty()) {
-                    val aIn = preferredProviders.contains(a.provider.lowercase())
-                    val bIn = preferredProviders.contains(b.provider.lowercase())
-                    if (aIn != bIn) {
-                        val res = if (aIn) -1 else 1
+        // 4. current source bias (favor candidates from the same source app)
+        currentSourceName?.let { source ->
+            val lower = source.lowercase()
+            val sourcePriority = when {
+                lower.contains("网易") -> listOf("netease", "ncm")
+                lower.contains("qq") -> listOf("qq", "qqmusic", "kugou")
+                lower.contains("酷狗") -> listOf("kugou", "qq", "qqmusic")
+                else -> emptyList()
+            }
+            if (sourcePriority.isNotEmpty()) {
+                val aIndex = sourcePriority.indexOf(a.provider.lowercase()).let { if (it < 0) Int.MAX_VALUE else it }
+                val bIndex = sourcePriority.indexOf(b.provider.lowercase()).let { if (it < 0) Int.MAX_VALUE else it }
+                if (aIndex != bIndex) {
+                    val res = aIndex.compareTo(bIndex)
                     Timber.d("compareCandidates source bias: $a vs $b -> $res")
                     return res
                 }
             }
 
-            // 3b. if one of the candidates is from AMLL DB and its songId has a
-            //    platform prefix matching the current source, favour it.
+            // 4b. If one candidate is AMLL and its prefix matches current source, prefer it.
             fun amllMatches(candidate: CustomLyricsCandidate): Boolean {
                 if (!candidate.provider.equals("amll", true)) return false
                 val parts = candidate.songId.split(":", limit = 2)
@@ -241,6 +243,10 @@ class CustomLyricsViewModel @JvmOverloads constructor(
 
     // helper used by searchCandidates and loadMore
     private suspend fun publishCandidate(candidate: CustomLyricsCandidate) {
+        val key = "${candidate.provider.lowercase()}:${candidate.songId}"
+        if (_candidates.value.any { "${it.provider.lowercase()}:${it.songId}" == key }) {
+            return
+        }
         val withSeq = candidate.copy(seq = seqGenerator.incrementAndGet())
         _candidates.value = (_candidates.value + withSeq)
             .sortedWith(combinedComparator)
@@ -273,7 +279,7 @@ class CustomLyricsViewModel @JvmOverloads constructor(
         lastSearchArtist = artist
         offsets.clear()
 
-        viewModelScope.launch {
+        viewModelScope.launch(launchDispatcher) {
             _isSearching.value = true
             _errorMessage.value = null
             _candidates.value = emptyList()
@@ -303,7 +309,7 @@ class CustomLyricsViewModel @JvmOverloads constructor(
                 lyricsRepository.searchLyricsIncremental(title, artist) { result ->
                     if (currentSongKey != songKey) return@searchLyricsIncremental
                     val candidate = result.toCandidate()
-                    viewModelScope.launch {
+                    viewModelScope.launch(launchDispatcher) {
                         publishCandidate(candidate)
                         // fetch features in background and re-sort when ready
                         val feats = runCatching {
@@ -340,7 +346,7 @@ class CustomLyricsViewModel @JvmOverloads constructor(
         val songKey = "${candidate.title}-${candidate.artist}"
         currentSongKey = songKey
 
-        viewModelScope.launch {
+        viewModelScope.launch(launchDispatcher) {
             _isApplying.value = true
             _errorMessage.value = null
             try {
@@ -464,27 +470,29 @@ class CustomLyricsViewModel @JvmOverloads constructor(
         val title = lastSearchTitle
         val artist = lastSearchArtist
         if (title.isBlank() && artist.isBlank()) return
-        viewModelScope.launch {
+        viewModelScope.launch(launchDispatcher) {
+            val keyPrefix = provider.lowercase()
             // after repository change each search returns max 3 candidates; offsets
             // can still be used to track how many we have shown locally but the
             // data source itself does not support pagination.  we therefore ignore
             // the stored offset when querying and instead update it afterwards.
-            val newResults = when (provider.lowercase()) {
+            val fetchedResults = when (keyPrefix) {
                 "qq", "qqmusic" -> lyricsRepository.searchQQMusic(title, artist)
                 "netease", "ncm" -> lyricsRepository.searchNetease(title, artist)
                 "kugou" -> lyricsRepository.searchKugou(title, artist)
                 else -> emptyList()
             }
-            val start = offsets.getOrDefault(provider, 0)
-            offsets[provider] = start + newResults.size
-            for (r in newResults) {
+            val start = offsets.getOrDefault(keyPrefix, 0)
+            val batch = fetchedResults.drop(start).take(3)
+            offsets[keyPrefix] = start + batch.size
+            for (r in batch) {
                 publishCandidate(r.toCandidate())
             }
         }
     }
 
     fun applyManualInput(input: String, title: String, artist: String) {
-        viewModelScope.launch {
+        viewModelScope.launch(launchDispatcher) {
             _isApplying.value = true
             _errorMessage.value = null
             try {
@@ -526,7 +534,7 @@ class CustomLyricsViewModel @JvmOverloads constructor(
         }
 
         // kick off a coroutine to resolve supported features; update candidate when ready
-        viewModelScope.launch {
+        viewModelScope.launch(launchDispatcher) {
             val features = runCatching {
                 lyricsRepository.getLyricsFeatures(
                     candidate.provider,
@@ -575,6 +583,7 @@ class CustomLyricsViewModel @JvmOverloads constructor(
 
     override fun onCleared() {
         super.onCleared()
-        httpClient.close()
     }
 }
+
+

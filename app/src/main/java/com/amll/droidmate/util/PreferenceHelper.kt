@@ -15,42 +15,64 @@ import android.content.SharedPreferences
  * ```
  */
 class PreferenceHelper(context: Context, name: String) {
-    private val prefs: SharedPreferences =
+    private val prefs: SharedPreferences? = runCatching {
         context.getSharedPreferences(name, Context.MODE_PRIVATE)
+    }.getOrNull()
+    private val memory = linkedMapOf<String, Any?>()
 
     fun getString(key: String, default: String? = null): String? =
-        prefs.getString(key, default)
+        prefs?.getString(key, default) ?: (memory[key] as? String ?: default)
 
     fun putString(key: String, value: String?) {
-        prefs.edit().putString(key, value).apply()
+        if (prefs != null) {
+            prefs.edit().putString(key, value).apply()
+        } else {
+            memory[key] = value
+        }
     }
 
     fun getBoolean(key: String, default: Boolean = false): Boolean =
-        prefs.getBoolean(key, default)
+        prefs?.getBoolean(key, default) ?: (memory[key] as? Boolean ?: default)
 
     fun putBoolean(key: String, value: Boolean) {
-        prefs.edit().putBoolean(key, value).apply()
+        if (prefs != null) {
+            prefs.edit().putBoolean(key, value).apply()
+        } else {
+            memory[key] = value
+        }
     }
 
     fun getLong(key: String, default: Long = 0L): Long =
-        prefs.getLong(key, default)
+        prefs?.getLong(key, default) ?: (memory[key] as? Long ?: default)
 
     fun putLong(key: String, value: Long) {
-        prefs.edit().putLong(key, value).apply()
+        if (prefs != null) {
+            prefs.edit().putLong(key, value).apply()
+        } else {
+            memory[key] = value
+        }
     }
 
     fun remove(key: String) {
-        prefs.edit().remove(key).apply()
+        if (prefs != null) {
+            prefs.edit().remove(key).apply()
+        } else {
+            memory.remove(key)
+        }
     }
 
     fun clear() {
-        prefs.edit().clear().apply()
+        if (prefs != null) {
+            prefs.edit().clear().apply()
+        } else {
+            memory.clear()
+        }
     }
 
     /**
      * Perform multiple editor operations in a single transaction.
      */
     fun edit(block: SharedPreferences.Editor.() -> Unit) {
-        prefs.edit().apply(block).apply()
+        prefs?.edit()?.apply(block)?.apply()
     }
 }

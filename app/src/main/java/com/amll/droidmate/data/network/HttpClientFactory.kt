@@ -26,18 +26,21 @@ object HttpClientFactory {
      * @return 配置好的 HttpClient 实例
      */
     fun create(context: Context): HttpClient {
-        // 创建缓存目录（在 Android cache 路径下）
-        val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
-        if (!cacheDir.exists()) {
-            cacheDir.mkdirs()
-        }
+        val httpCache = runCatching {
+            // 创建缓存目录（在 Android cache 路径下）
+            val cacheDir = File(context.cacheDir, CACHE_DIR_NAME)
+            if (!cacheDir.exists()) {
+                cacheDir.mkdirs()
+            }
+            Cache(cacheDir, CACHE_SIZE)
+        }.getOrNull()
         
         return HttpClient(OkHttp) {
             // 配置 OkHttp 引擎
             engine {
                 config {
                     // 添加 HTTP 缓存（存储在 cache 目录）
-                    cache(Cache(cacheDir, CACHE_SIZE))
+                    httpCache?.let { cache(it) }
                     
                     // 连接超时
                     connectTimeout(30, TimeUnit.SECONDS)

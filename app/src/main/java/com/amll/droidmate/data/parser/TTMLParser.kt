@@ -2,6 +2,7 @@ package com.amll.droidmate.data.parser
 
 import com.amll.droidmate.domain.model.LyricLine
 import com.amll.droidmate.domain.model.LyricWord
+import com.amll.droidmate.domain.model.SongPart
 import timber.log.Timber
 import org.w3c.dom.Document
 import org.w3c.dom.Element
@@ -15,16 +16,23 @@ import javax.xml.parsers.DocumentBuilderFactory
 object TTMLParser {
     
     private val factory = DocumentBuilderFactory.newInstance()
-    
-    fun parse(content: String): List<LyricLine> {
-        if (content.isBlank()) return emptyList()
+
+    data class TTMLParseResult(
+        val lines: List<LyricLine>,
+        val songParts: List<SongPart>
+    )
+
+    fun parse(content: String): List<LyricLine> = parseWithSongParts(content).lines
+
+    fun parseWithSongParts(content: String): TTMLParseResult {
+        if (content.isBlank()) return TTMLParseResult(emptyList(), emptyList())
 
         val builder = factory.newDocumentBuilder()
 
         // attempt a normal parse first; if it fails we may be dealing with
         // malformed metadata tags (common in Apple-supplied TTML) and we'll
         // retry after sanitizing the input.
-        fun tryParse(input: String): List<LyricLine> {
+        fun tryParse(input: String): TTMLParseResult {
             val doc = builder.parse(input.byteInputStream())
             return parseTTMLDocument(doc)
         }
@@ -38,7 +46,7 @@ object TTMLParser {
                 tryParse(sanitized)
             } catch (e2: Exception) {
                 Timber.e(e2, "Failed to parse TTML content after sanitization")
-                emptyList()
+                TTMLParseResult(emptyList(), emptyList())
             }
         }
     }
@@ -58,11 +66,14 @@ object TTMLParser {
         var bgTransliteration: String? = null
     )
 
-    private fun parseTTMLDocument(doc: Document): List<LyricLine> {
+    private fun parseTTMLDocument(doc: Document): TTMLParseResult {
         val parsedParagraphs = mutableListOf<ParsedParagraph>()
+        val songParts = mutableListOf<SongPart>()
 
         try {
-            val body = doc.getElementsByTagName("body").item(0) as? Element ?: return emptyList()
+            val body = doc.getElementsByTagName("body").item(0) as? Element
+                ?: return TTMLParseResult(emptyList(), emptyList())
+            songParts += parseSongParts(body)
             val paragraphs = body.getElementsByTagName("p")
             for (i in 0 until paragraphs.length) {
                 val pElement = paragraphs.item(i) as? Element ?: continue
@@ -74,7 +85,7 @@ object TTMLParser {
             }
         } catch (e: Exception) {
             Timber.e(e, "Failed to parse TTML document structure")
-            return emptyList()
+            return TTMLParseResult(emptyList(), emptyList())
         }
 
         val normalizedAgents = parsedParagraphs.map { normalizeAgent(it.agent) }
@@ -113,8 +124,87 @@ object TTMLParser {
             parsed.bgLine?.let { lines.add(it.copy(isBG = true, isDuet = isDuet)) }
         }
 
-        Timber.d("[AGENT-DEBUG] Parse complete: ${lines.size} total output lines")
-        return lines
+        Timber.d(
+            "[AGENT-DEBUG] Parse complete: ${lines.size} total output lines, ${songParts.size} song parts"
+        )
+        return TTMLParseResult(lines = lines, songParts = songParts)
+    }
+
+    private fun parseSongParts(body: Element): List<SongPart> {
+        val result = mutableListOf<SongPart>()
+        val children = body.childNodes ?: return emptyList()
+        for (i in 0 until children.length) {
+            val node = children.item(i)
+            if (node.nodeType != Node.ELEMENT_NODE) continue
+            val element = node as? Element ?: continue
+            val tag = element.tagName.substringAfter(':').lowercase()
+            if (tag != "div") continue
+            parseSongPartFromDiv(element)?.let { result.add(it) }
+        }
+        return result
+    }
+
+    private fun parseSongPartFromDiv(div: Element): SongPart? {
+        val name = readSongPartAttr(div)?.trim().orEmpty()
+        if (name.isEmpty()) return null
+
+        val hasBegin = div.hasAttribute("begin")
+        val hasEnd = div.hasAttribute("end")
+        var startTime = if (hasBegin) timeStrToMillis(div.getAttribute("begin")) else 0L
+        var endTime = if (hasEnd) timeStrToMillis(div.getAttribute("end")) else 0L
+
+        val inferredRange = inferDivTimeRangeFromParagraphs(div)
+        if (!hasBegin) {
+            startTime = inferredRange?.first ?: 0L
+        }
+        if (!hasEnd || endTime <= startTime) {
+            endTime = inferredRange?.second ?: endTime
+        }
+
+        if (endTime <= startTime) return null
+        return SongPart(name = name, startTime = startTime, endTime = endTime)
+    }
+
+    private fun inferDivTimeRangeFromParagraphs(div: Element): Pair<Long, Long>? {
+        val paragraphs = div.getElementsByTagName("p")
+        if (paragraphs.length == 0) return null
+
+        var minStart = Long.MAX_VALUE
+        var maxEnd = Long.MIN_VALUE
+        for (i in 0 until paragraphs.length) {
+            val p = paragraphs.item(i) as? Element ?: continue
+            val start = timeStrToMillis(p.getAttribute("begin"))
+            val endRaw = timeStrToMillis(p.getAttribute("end"))
+            val end = if (endRaw > start) endRaw else start + 3000L
+            minStart = minOf(minStart, start)
+            maxEnd = maxOf(maxEnd, end)
+        }
+
+        if (minStart == Long.MAX_VALUE || maxEnd <= minStart) return null
+        return minStart to maxEnd
+    }
+
+    private fun readSongPartAttr(element: Element): String? {
+        val explicitNames = listOf("itunes:songPart", "itunes:song-Part", "songPart", "song-Part")
+        for (attrName in explicitNames) {
+            val value = element.getAttribute(attrName).trim()
+            if (value.isNotEmpty()) return value
+        }
+
+        val attrs = element.attributes ?: return null
+        for (i in 0 until attrs.length) {
+            val attr = attrs.item(i) ?: continue
+            val attrName = attr.nodeName?.trim()?.lowercase().orEmpty()
+            val isSongPartKey = attrName == "itunes:songpart" ||
+                attrName == "itunes:song-part" ||
+                attrName == "songpart" ||
+                attrName == "song-part"
+            if (!isSongPartKey) continue
+            val value = attr.nodeValue?.trim().orEmpty()
+            if (value.isNotEmpty()) return value
+        }
+
+        return null
     }
 
     private fun parseParagraph(pElement: Element): ParsedParagraph? {
@@ -136,6 +226,12 @@ object TTMLParser {
                 inBackground = false,
                 buffer = buffer
             )
+            if (buffer.mainWords.isEmpty()) {
+                buffer.mainWords += parseWordsByTimeAttr(pElement, inBackground = false, paragraphEnd = endTime)
+            }
+            if (buffer.bgWords.isEmpty()) {
+                buffer.bgWords += parseWordsByTimeAttr(pElement, inBackground = true, paragraphEnd = endTime)
+            }
 
             val mainText = if (buffer.mainWords.isNotEmpty()) {
                 buffer.mainWords.joinToString(separator = "") { it.word }
@@ -310,6 +406,71 @@ object TTMLParser {
                 }
             }
         }
+    }
+
+    private fun parseWordsByTimeAttr(
+        paragraph: Element,
+        inBackground: Boolean,
+        paragraphEnd: Long
+    ): List<LyricWord> {
+        val spans = paragraph.getElementsByTagName("span")
+        if (spans.length == 0) return emptyList()
+
+        val timed = mutableListOf<Pair<Long, String>>()
+        for (i in 0 until spans.length) {
+            val span = spans.item(i) as? Element ?: continue
+            val role = readRoleAttr(span)
+            val isBgRole = role == "x-bg"
+            val isAuxRole = role == "x-translation" || role == "x-roman" || role == "x-romanization"
+            if (isAuxRole) continue
+            if (inBackground && !isBgRole && !hasBackgroundAncestor(span)) continue
+            if (!inBackground && (isBgRole || hasBackgroundAncestor(span))) continue
+
+            val timeAttr = readTimeAttr(span)
+            if (timeAttr.isBlank()) continue
+            val start = timeStrToMillis(timeAttr)
+            val text = normalizeLyricTextPreservingSpaces(span.textContent ?: "")
+            if (text.isBlank()) continue
+            val wordText = if (inBackground) cleanBackgroundText(text) else text
+            timed.add(start to wordText)
+        }
+
+        if (timed.isEmpty()) return emptyList()
+
+        return timed.mapIndexed { index, (start, text) ->
+            val nextStart = timed.getOrNull(index + 1)?.first ?: paragraphEnd
+            val end = if (nextStart > start) nextStart else start + 300L
+            LyricWord(word = text, startTime = start, endTime = end)
+        }
+    }
+
+    private fun hasBackgroundAncestor(element: Element): Boolean {
+        var current: Node? = element.parentNode
+        while (current != null) {
+            if (current.nodeType == Node.ELEMENT_NODE) {
+                val currentElement = current as Element
+                if (readRoleAttr(currentElement) == "x-bg") return true
+            }
+            current = current.parentNode
+        }
+        return false
+    }
+
+    private fun readTimeAttr(element: Element): String {
+        val direct = element.getAttribute("ttm:time")
+            .ifBlank { element.getAttribute("time") }
+            .trim()
+        if (direct.isNotEmpty()) return direct
+
+        val attrs = element.attributes ?: return ""
+        for (i in 0 until attrs.length) {
+            val node = attrs.item(i) ?: continue
+            val name = node.nodeName?.trim()?.lowercase().orEmpty()
+            if (name == "time" || name.endsWith(":time")) {
+                return node.nodeValue?.trim().orEmpty()
+            }
+        }
+        return ""
     }
 
     private fun hasDirectTimedSpanChild(element: Element): Boolean {
@@ -563,9 +724,29 @@ object TTMLParser {
      * does not rely on them, and removing them resolves XML exceptions.
      */
     private fun sanitizeTTMLContent(raw: String): String {
-        return raw.replace(
+        var sanitized = raw.replace(
             Regex("<amll:meta\\b[^>]*?(?:\\/>|>.*?<\\/amll:meta>)", RegexOption.DOT_MATCHES_ALL),
             ""
         )
+
+        // Some providers double-escape XML quotes (e.g. \" in raw payloads).
+        // XML parser cannot read those declarations/attributes directly.
+        sanitized = sanitized
+            .replace("\\\"", "\"")
+            .replace("\\'", "'")
+
+        // If prefixed ttm attributes are present but namespace is missing,
+        // inject a default metadata namespace to keep parser tolerant.
+        if (sanitized.contains("ttm:") && !Regex("xmlns:ttm\\s*=").containsMatchIn(sanitized)) {
+            sanitized = when {
+                sanitized.contains("<tt ") ->
+                    sanitized.replaceFirst("<tt ", "<tt xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\" ")
+                sanitized.contains("<tt>") ->
+                    sanitized.replaceFirst("<tt>", "<tt xmlns:ttm=\"http://www.w3.org/ns/ttml#metadata\">")
+                else -> sanitized
+            }
+        }
+
+        return sanitized
     }
 }

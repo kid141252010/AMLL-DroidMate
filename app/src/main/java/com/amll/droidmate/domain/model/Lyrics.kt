@@ -49,12 +49,23 @@ data class LyricLine(
 )
 
 /**
+ * TTML 乐段信息（来自 <div songPart=...>）
+ */
+@Serializable
+data class SongPart(
+    val name: String,
+    val startTime: Long,   // 毫秒
+    val endTime: Long      // 毫秒
+)
+
+/**
  * TTML 歌词结构
  */
 @Serializable
 data class TTMLLyrics(
     val metadata: TTMLMetadata,
-    val lines: List<LyricLine>
+    val lines: List<LyricLine>,
+    val songParts: List<SongPart> = emptyList()
 )
 
 /**

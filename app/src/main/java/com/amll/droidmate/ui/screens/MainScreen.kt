@@ -32,7 +32,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.PressInteraction
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -73,6 +75,7 @@ import com.amll.droidmate.R
 import com.amll.droidmate.domain.model.LyricLine
 import com.amll.droidmate.ui.theme.AlbumColorExtractor
 import com.amll.droidmate.domain.model.NowPlayingMusic
+import com.amll.droidmate.domain.model.SongPart
 import com.amll.droidmate.domain.model.TTMLLyrics
 import com.amll.droidmate.ui.AppSettings
 import com.amll.droidmate.ui.CardClickAction
@@ -345,6 +348,7 @@ fun MainScreen() {
             }
 
             val currentLyrics = lyrics
+            val currentSongParts = currentLyrics?.songParts.orEmpty()
             val shouldShowSpinner = isLoading
             LaunchedEffect(shouldShowSpinner) {
                 if (shouldShowSpinner) {
@@ -419,6 +423,18 @@ fun MainScreen() {
                 }
             } else {
                 Spacer(Modifier.fillMaxWidth().weight(1f))
+            }
+
+            AnimatedVisibility(visible = !isLyricsFullscreen && currentSongParts.isNotEmpty()) {
+                SongPartsStrip(
+                    songParts = currentSongParts,
+                    currentPosition = nowPlaying?.currentPosition ?: 0L,
+                    onSeekToPart = { songPart -> viewModel.seekTo(songPart.startTime) },
+                    containerColor = cardBg,
+                    activeColor = rippleColor.value,
+                    textColor = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                )
             }
 
             AnimatedVisibility(visible = !isLyricsFullscreen) {
@@ -533,61 +549,139 @@ fun MainScreen() {
                 }
 
                 nowPlaying?.let { currentPlaying ->
-                    Row(
-                        modifier = Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(bottom = 64.dp, start = 32.dp, end = 32.dp).height(100.dp).alpha(controlsAlpha),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceAround // 平衡按钮间距
+                    val fullscreenSongParts = lyrics?.songParts.orEmpty()
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .fillMaxWidth()
+                            .padding(bottom = 40.dp, start = 24.dp, end = 24.dp)
+                            .alpha(controlsAlpha),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        val leftInteractionSource = remember { MutableInteractionSource() }
-                        Box(
-                            modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(50)).indication(leftInteractionSource, ripple())
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onTap = {
-                                            if ((currentPlaying.currentPosition) > 3000L && AppSettings.isSkipPreviousRewindsEnabled(context)) viewModel.seekTo(0L) else viewModel.skipToPrevious()
-                                            resetHideTimer()
-                                        },
-                                        onPress = { offset ->
-                                            val press = PressInteraction.Press(offset)
-                                            leftInteractionSource.tryEmit(press)
-                                            val job = innerScope.launch { delay(500); while(true) { viewModel.rewind(); delay(200) } }
-                                            try { awaitPointerEventScope { waitForUpOrCancellation(); job.cancel(); leftInteractionSource.tryEmit(PressInteraction.Release(press)) } }
-                                            catch (e: Exception) { job.cancel(); leftInteractionSource.tryEmit(PressInteraction.Cancel(press)) }
-                                            resetHideTimer()
-                                        }
-                                    )
-                                },
-                            contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Default.FastRewind, null, Modifier.size(40.dp), Color.White.copy(0.9f)) }
-
-                        Box(
-                            modifier = Modifier.weight(1.5f).fillMaxHeight().clip(RoundedCornerShape(50))
-                                .clickable(interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = Color.White)) {
-                                    if (currentPlaying.isPlaying) viewModel.pause() else viewModel.play()
+                        AnimatedVisibility(visible = fullscreenSongParts.isNotEmpty()) {
+                            SongPartsStrip(
+                                songParts = fullscreenSongParts,
+                                currentPosition = currentPlaying.currentPosition,
+                                onSeekToPart = { songPart ->
+                                    viewModel.seekTo(songPart.startTime)
                                     resetHideTimer()
                                 },
-                            contentAlignment = Alignment.Center
-                        ) { Icon(if (currentPlaying.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, Modifier.size(64.dp), Color.White.copy(0.9f)) }
+                                containerColor = Color.Black.copy(alpha = 0.35f),
+                                activeColor = rippleColor.value,
+                                textColor = Color.White,
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
 
-                        val rightInteractionSource = remember { MutableInteractionSource() }
-                        Box(
-                            modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(50)).indication(rightInteractionSource, ripple())
-                                .pointerInput(Unit) {
-                                    detectTapGestures(
-                                        onTap = { viewModel.skipToNext(); resetHideTimer() },
-                                        onPress = { offset ->
-                                            val press = PressInteraction.Press(offset)
-                                            rightInteractionSource.tryEmit(press)
-                                            val job = innerScope.launch { delay(500); while(true) { viewModel.fastForward(); delay(200) } }
-                                            try { awaitPointerEventScope { waitForUpOrCancellation(); job.cancel(); rightInteractionSource.tryEmit(PressInteraction.Release(press)) } }
-                                            catch (e: Exception) { job.cancel(); rightInteractionSource.tryEmit(PressInteraction.Cancel(press)) }
-                                            resetHideTimer()
-                                        }
-                                    )
-                                },
-                            contentAlignment = Alignment.Center
-                        ) { Icon(Icons.Default.FastForward, null, Modifier.size(40.dp), Color.White.copy(0.9f)) }
+                        Row(
+                            modifier = Modifier.fillMaxWidth().height(100.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceAround // 平衡按钮间距
+                        ) {
+                            val leftInteractionSource = remember { MutableInteractionSource() }
+                            Box(
+                                modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(50)).indication(leftInteractionSource, ripple())
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onTap = {
+                                                if ((currentPlaying.currentPosition) > 3000L && AppSettings.isSkipPreviousRewindsEnabled(context)) viewModel.seekTo(0L) else viewModel.skipToPrevious()
+                                                resetHideTimer()
+                                            },
+                                            onPress = { offset ->
+                                                val press = PressInteraction.Press(offset)
+                                                leftInteractionSource.tryEmit(press)
+                                                val job = innerScope.launch { delay(500); while(true) { viewModel.rewind(); delay(200) } }
+                                                try { awaitPointerEventScope { waitForUpOrCancellation(); job.cancel(); leftInteractionSource.tryEmit(PressInteraction.Release(press)) } }
+                                                catch (e: Exception) { job.cancel(); leftInteractionSource.tryEmit(PressInteraction.Cancel(press)) }
+                                                resetHideTimer()
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.FastRewind, null, Modifier.size(40.dp), Color.White.copy(0.9f)) }
+
+                            Box(
+                                modifier = Modifier.weight(1.5f).fillMaxHeight().clip(RoundedCornerShape(50))
+                                    .clickable(interactionSource = remember { MutableInteractionSource() }, indication = ripple(color = Color.White)) {
+                                        if (currentPlaying.isPlaying) viewModel.pause() else viewModel.play()
+                                        resetHideTimer()
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) { Icon(if (currentPlaying.isPlaying) Icons.Default.Pause else Icons.Default.PlayArrow, null, Modifier.size(64.dp), Color.White.copy(0.9f)) }
+
+                            val rightInteractionSource = remember { MutableInteractionSource() }
+                            Box(
+                                modifier = Modifier.weight(1f).fillMaxHeight().clip(RoundedCornerShape(50)).indication(rightInteractionSource, ripple())
+                                    .pointerInput(Unit) {
+                                        detectTapGestures(
+                                            onTap = { viewModel.skipToNext(); resetHideTimer() },
+                                            onPress = { offset ->
+                                                val press = PressInteraction.Press(offset)
+                                                rightInteractionSource.tryEmit(press)
+                                                val job = innerScope.launch { delay(500); while(true) { viewModel.fastForward(); delay(200) } }
+                                                try { awaitPointerEventScope { waitForUpOrCancellation(); job.cancel(); rightInteractionSource.tryEmit(PressInteraction.Release(press)) } }
+                                                catch (e: Exception) { job.cancel(); rightInteractionSource.tryEmit(PressInteraction.Cancel(press)) }
+                                                resetHideTimer()
+                                            }
+                                        )
+                                    },
+                                contentAlignment = Alignment.Center
+                            ) { Icon(Icons.Default.FastForward, null, Modifier.size(40.dp), Color.White.copy(0.9f)) }
+                        }
                     }
+                }
+            }
+        }
+    }
+}
+
+
+@Composable
+private fun SongPartsStrip(
+    songParts: List<SongPart>,
+    currentPosition: Long,
+    onSeekToPart: (SongPart) -> Unit,
+    containerColor: Color,
+    activeColor: Color,
+    textColor: Color,
+    modifier: Modifier = Modifier
+) {
+    if (songParts.isEmpty()) return
+
+    val activeIndex = songParts.indexOfFirst { part ->
+        currentPosition >= part.startTime && currentPosition < part.endTime
+    }
+    val activeTextColor = activeColor.contrastAgainst()
+
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(14.dp),
+        color = containerColor
+    ) {
+        LazyRow(
+            modifier = Modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            itemsIndexed(songParts) { index, part ->
+                val isActive = index == activeIndex
+                val chipBackground = if (isActive) activeColor else Color.White.copy(alpha = 0.16f)
+                val chipTextColor = if (isActive) activeTextColor else textColor
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(100))
+                        .background(chipBackground)
+                        .clickable { onSeekToPart(part) }
+                        .padding(horizontal = 12.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = part.name,
+                        color = chipTextColor,
+                        fontSize = 12.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
                 }
             }
         }

@@ -1,6 +1,7 @@
 package com.amll.droidmate.data.parser
 
 import com.amll.droidmate.domain.model.LyricLine
+import com.amll.droidmate.domain.model.SongPart
 import com.amll.droidmate.domain.model.TTMLLyrics
 import com.amll.droidmate.domain.model.TTMLMetadata
 import timber.log.Timber
@@ -68,6 +69,8 @@ object UnifiedLyricsParser {
             // 检测格式（使用归一化内容来避免 BOM 等前缀影响检测）
             val format = LyricsFormat.detect(normalizedContent)
             Timber.i("Detected lyrics format: $format")
+
+            var parsedSongParts: List<SongPart> = emptyList()
             
             // 使用相应的解析器解析
             val lines = when (format) {
@@ -108,9 +111,12 @@ object UnifiedLyricsParser {
                     // TTML 格式使用专用解析器
                     Timber.i("Parsing TTML format")
                     Timber.d("[BG-LYRICS-DEBUG] Unified TTML input has x-bg=${normalizedContent.contains("ttm:role=\"x-bg\"")}, x-translation=${normalizedContent.contains("ttm:role=\"x-translation\"")}, length=${normalizedContent.length}")
-                    val parsed = TTMLParser.parse(normalizedContent)
-                    Timber.d("[BG-LYRICS-DEBUG] Unified TTML parsed summary: ${summarizeBgLines(parsed)}")
-                    parsed
+                    val parsed = TTMLParser.parseWithSongParts(normalizedContent)
+                    parsedSongParts = parsed.songParts
+                    Timber.d(
+                        "[BG-LYRICS-DEBUG] Unified TTML parsed summary: ${summarizeBgLines(parsed.lines)}, songParts=${parsed.songParts.size}"
+                    )
+                    parsed.lines
                 }
                 LyricsFormat.PLAIN_TEXT -> {
                     // 纯文本格式转换为简单行
@@ -153,7 +159,8 @@ object UnifiedLyricsParser {
                     duration = duration,
                     source = "DroidMate (${format.displayName})"
                 ),
-                lines = sortedLines
+                lines = sortedLines,
+                songParts = parsedSongParts
             )
         } catch (e: Exception) {
             Timber.e(e, "Failed to parse lyrics")

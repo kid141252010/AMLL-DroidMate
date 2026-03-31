@@ -81,4 +81,26 @@ class UnifiedLyricsParserTest {
         assertTrue("Expected some parsed lines", lyrics!!.lines.isNotEmpty())
         assertTrue("Expected lyric text to contain the character '唯'", lyrics.lines.any { it.text.contains("唯") })
     }
+
+    @Test
+    fun `parse TTML should include song parts`() {
+        val sample = """
+            <?xml version="1.0" encoding="UTF-8"?>
+            <tt xmlns="http://www.w3.org/ns/ttml" xmlns:itunes="http://music.apple.com/lyric-ttml-internal">
+              <body>
+                <div begin="00:00.000" end="00:05.000" itunes:songPart="Intro">
+                  <p begin="00:00.000" end="00:05.000">Hello</p>
+                </div>
+                <div begin="00:05.000" end="00:10.000" songPart="Verse">
+                  <p begin="00:05.000" end="00:10.000">World</p>
+                </div>
+              </body>
+            </tt>
+        """.trimIndent()
+
+        val lyrics = UnifiedLyricsParser.parse(sample, title = "Sample", artist = "Artist")
+        assertNotNull(lyrics)
+        assertEquals(2, lyrics!!.songParts.size)
+        assertEquals(listOf("Intro", "Verse"), lyrics.songParts.map { it.name })
+    }
 }

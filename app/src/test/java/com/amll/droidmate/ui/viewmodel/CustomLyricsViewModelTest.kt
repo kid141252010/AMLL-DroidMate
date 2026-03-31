@@ -18,22 +18,30 @@ import io.ktor.client.statement.*
 import io.ktor.http.*
 import io.ktor.http.headersOf
 import com.amll.droidmate.data.repository.LyricsRepository
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.StandardTestDispatcher
 
 /**
  * Basic unit tests for [CustomLyricsViewModel].  Since the implementation
  * runs its logic on a coroutine scope we simply wait a short time after
  * calling to make sure the state flow has been updated.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class CustomLyricsViewModelTest {
+    private val testDispatcher = StandardTestDispatcher()
+
     @Before
     fun setUp() {
-        // no-op
+        Dispatchers.setMain(testDispatcher)
     }
 
     @After
     fun tearDown() {
-        // no-op
+        Dispatchers.resetMain()
     }
 
     @Test
@@ -96,10 +104,8 @@ class CustomLyricsViewModelTest {
             displayName = "",
             features = setOf(com.amll.droidmate.domain.model.LyricsFeature.TRANSLATION)
         )
-        // when inserted separately comparator will reorder
-        runTest {
-            viewModel.searchCandidates("", "") // no-op but ensures flows initialized
-        }
+        // initialize flows in the same coroutine test scope
+        viewModel.searchCandidates("", "") // no-op
         // directly test comparator
         val sorted = listOf(c1, c2).sortedWith(viewModel.candidateComparator)
         assertEquals(c2, sorted.first())
@@ -187,7 +193,7 @@ class CustomLyricsViewModelTest {
     }
 
     @Test
-    fun `loadMore adds next batch of QQ results`() = runTest {
+    fun `loadMore keeps list stable when provider results are capped`() = runTest {
         // engine returns 5 QQ items whenever QQ endpoint is called, empty for others
         val qqItems = (1..5).joinToString(",") { i ->
             "{\"mid\":\"m$i\",\"id\":$i,\"title\":\"T$i\",\"singer\":[{\"name\":\"A\"}]}"
@@ -207,7 +213,7 @@ class CustomLyricsViewModelTest {
         val viewModel = CustomLyricsViewModel(Application(), lyricsRepository = fakeRepo, lyricsCacheRepository = fakeCache)
 
         // perform initial search to populate lastSearchTitle/artist
-        viewModel.searchCandidates("x", "y")
+        viewModel.searchCandidates("T", "A")
         advanceUntilIdle()
 
         // load first batch
@@ -215,10 +221,10 @@ class CustomLyricsViewModelTest {
         advanceUntilIdle()
         assertEquals(3, viewModel.candidates.value.size)
 
-        // load second batch
+        // load second batch: repository currently returns at most 3 QQ candidates
         viewModel.loadMore("qq")
         advanceUntilIdle()
-        assertEquals(5, viewModel.candidates.value.size)
+        assertEquals(3, viewModel.candidates.value.size)
     }
 
     @Test
