@@ -6,7 +6,7 @@ const PLAYER_BACKGROUND = 'transparent'
 const SEEK_THRESHOLD_MS = 900
 const SEEK_HOLD_MS = 180
 const MANUAL_SEEK_GUARD_MS = 1200
-const MANUAL_SEEK_TOLERANCE_MS = 120
+const MANUAL_SEEK_TOLERANCE_MS = 80
 const DEFAULT_FONT_STACK = '"SF Pro Display", "PingFang SC", system-ui, -apple-system, "Segoe UI", sans-serif'
 const DYNAMIC_FONT_STYLE_ID = 'amll-dynamic-font-face-style'
 const SONG_PART_STYLE_ID = 'amll-song-part-style'
@@ -118,10 +118,6 @@ function ensureSongPartStyle() {
   overflow-x: auto;
   white-space: nowrap;
   padding: 8px 10px;
-  border-radius: 14px;
-  background: rgba(12, 12, 12, 0.36);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   pointer-events: none;
 }
 
@@ -135,6 +131,8 @@ function ensureSongPartStyle() {
   border-radius: 12px;
   padding: 6px 12px;
   background: rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
   color: rgba(255, 255, 255, 0.9);
   font-size: 12px;
   font-weight: 600;

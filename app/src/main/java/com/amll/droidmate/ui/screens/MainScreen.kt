@@ -430,10 +430,10 @@ fun MainScreen() {
                     songParts = currentSongParts,
                     currentPosition = nowPlaying?.currentPosition ?: 0L,
                     onSeekToPart = { songPart -> viewModel.seekTo(songPart.startTime) },
-                    containerColor = cardBg,
+                    containerColor = Color.Transparent,
                     activeColor = rippleColor.value,
                     textColor = MaterialTheme.colorScheme.onSurface,
-                    modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp)
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 
@@ -566,7 +566,7 @@ fun MainScreen() {
                                     viewModel.seekTo(songPart.startTime)
                                     resetHideTimer()
                                 },
-                                containerColor = Color.Black.copy(alpha = 0.35f),
+                                containerColor = Color.Transparent,
                                 activeColor = rippleColor.value,
                                 textColor = Color.White,
                                 modifier = Modifier.fillMaxWidth()
@@ -662,17 +662,17 @@ private fun SongPartsStrip(
 
     Surface(
         modifier = modifier,
-        shape = RoundedCornerShape(14.dp),
         color = containerColor
     ) {
         LazyRow(
             modifier = Modifier.fillMaxWidth(),
-            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             itemsIndexed(songParts) { index, part ->
                 val isActive = index == activeIndex
-                val chipBackground = if (isActive) activeColor else Color.White.copy(alpha = 0.16f)
+                val isDarkText = textColor == Color.White
+                val chipBackground = if (isActive) activeColor else if (isDarkText) Color.White.copy(alpha = 0.16f) else textColor.copy(alpha = 0.08f)
                 val chipTextColor = if (isActive) activeTextColor else textColor
                 Box(
                     modifier = Modifier

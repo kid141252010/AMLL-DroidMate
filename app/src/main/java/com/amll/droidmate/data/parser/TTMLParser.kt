@@ -69,6 +69,7 @@ object TTMLParser {
     private fun parseTTMLDocument(doc: Document): TTMLParseResult {
         val parsedParagraphs = mutableListOf<ParsedParagraph>()
         val songParts = mutableListOf<SongPart>()
+        val preferredAgents = readPreferredAgents(doc)
 
         try {
             val body = doc.getElementsByTagName("body").item(0) as? Element
@@ -103,8 +104,13 @@ object TTMLParser {
                     .filterNotNull()
                     .groupingBy { it }
                     .eachCount()
-                val leftAgent = uniqueAgents.maxByOrNull { agentCounts[it] ?: 0 } ?: uniqueAgents.first()
-                Timber.d("[AGENT-DEBUG] Mode: exactly 2 agents. leftAgent=$leftAgent(count=${agentCounts[leftAgent] ?: 0}), rightAgent=${uniqueAgents.firstOrNull { it != leftAgent }}")
+                val preferredLeftAgent = preferredAgents.firstOrNull { preferred -> uniqueAgents.any { it == preferred } }
+                val leftAgent = preferredLeftAgent
+                    ?: uniqueAgents.maxByOrNull { agentCounts[it] ?: 0 }
+                    ?: uniqueAgents.first()
+                Timber.d(
+                    "[AGENT-DEBUG] Mode: exactly 2 agents. leftAgent=$leftAgent(preferred=${preferredLeftAgent ?: "none"}, count=${agentCounts[leftAgent] ?: 0}), rightAgent=${uniqueAgents.firstOrNull { it != leftAgent }}"
+                )
                 normalizedAgents.mapIndexed { idx, agent ->
                     val isDuet = agent != null && agent != leftAgent
                     if (idx < 5) Timber.d("[AGENT-DEBUG] Line $idx: agent=$agent -> isDuet=$isDuet")
@@ -132,6 +138,44 @@ object TTMLParser {
             "[AGENT-DEBUG] Parse complete: ${lines.size} total output lines, ${songParts.size} song parts"
         )
         return TTMLParseResult(lines = lines, songParts = songParts)
+    }
+
+    private fun readPreferredAgents(doc: Document): List<String> {
+        val agentNodes = mutableListOf<Element>()
+        val explicit = doc.getElementsByTagName("ttm:agent")
+        for (i in 0 until explicit.length) {
+            (explicit.item(i) as? Element)?.let { agentNodes += it }
+        }
+        if (agentNodes.isEmpty()) {
+            val fallback = doc.getElementsByTagName("agent")
+            for (i in 0 until fallback.length) {
+                val element = fallback.item(i) as? Element ?: continue
+                if (element.getAttribute("xml:id").isBlank() && element.getAttribute("id").isBlank()) continue
+                agentNodes += element
+            }
+        }
+        if (agentNodes.isEmpty()) return emptyList()
+
+        data class AgentMeta(val id: String, val score: Int, val order: Int)
+
+        val parsed = agentNodes.mapIndexedNotNull { index, element ->
+            val rawId = element.getAttribute("xml:id")
+                .ifBlank { element.getAttribute("id") }
+                .trim()
+            val id = normalizeAgent(rawId) ?: return@mapIndexedNotNull null
+            val type = element.getAttribute("type").trim().lowercase()
+            val score = when (type) {
+                "person", "main", "lead", "vocal" -> 0
+                "other", "chorus", "background" -> 2
+                else -> 1
+            }
+            AgentMeta(id = id, score = score, order = index)
+        }
+
+        return parsed
+            .sortedWith(compareBy<AgentMeta> { it.score }.thenBy { it.order })
+            .map { it.id }
+            .distinct()
     }
 
     private fun parseSongParts(body: Element): List<SongPart> {
