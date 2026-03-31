@@ -61,7 +61,11 @@ object AgentRecognizer {
         // if multiple agents exist, mark duet lines
         val uniqueAgents = annotated.mapNotNull { it.agent }.distinct()
         if (uniqueAgents.size > 1) {
-            val primaryAgent = uniqueAgents.first()
+            val agentCounts = annotated
+                .mapNotNull { it.agent }
+                .groupingBy { it }
+                .eachCount()
+            val primaryAgent = uniqueAgents.maxByOrNull { agentCounts[it] ?: 0 } ?: uniqueAgents.first()
             return annotated.map { line ->
                 val agent = line.agent
                 if (agent.isNullOrBlank()) return@map line

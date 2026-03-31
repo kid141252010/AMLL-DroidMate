@@ -99,8 +99,12 @@ object TTMLParser {
                 List(parsedParagraphs.size) { false }
             }
             uniqueAgents.size == 2 -> {
-                val leftAgent = normalizedAgents.firstOrNull { it != null } ?: uniqueAgents.first()
-                Timber.d("[AGENT-DEBUG] Mode: exactly 2 agents. leftAgent=$leftAgent, rightAgent=${uniqueAgents.firstOrNull { it != leftAgent }}")
+                val agentCounts = normalizedAgents
+                    .filterNotNull()
+                    .groupingBy { it }
+                    .eachCount()
+                val leftAgent = uniqueAgents.maxByOrNull { agentCounts[it] ?: 0 } ?: uniqueAgents.first()
+                Timber.d("[AGENT-DEBUG] Mode: exactly 2 agents. leftAgent=$leftAgent(count=${agentCounts[leftAgent] ?: 0}), rightAgent=${uniqueAgents.firstOrNull { it != leftAgent }}")
                 normalizedAgents.mapIndexed { idx, agent ->
                     val isDuet = agent != null && agent != leftAgent
                     if (idx < 5) Timber.d("[AGENT-DEBUG] Line $idx: agent=$agent -> isDuet=$isDuet")

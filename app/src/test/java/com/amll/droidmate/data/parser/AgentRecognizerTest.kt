@@ -25,6 +25,21 @@ class AgentRecognizerTest {
         assertTrue(result[3].isDuet)
     }
 
+    @Test
+    fun `recognizeAgents prefers dominant agent as main side`() {
+        val lines = listOf(
+            createLine("B: intro"),
+            createLine("A: main 1"),
+            createLine("A: main 2")
+        )
+
+        val result = AgentRecognizer.recognizeAgents(lines)
+        assertEquals(3, result.size)
+        assertTrue(result[0].isDuet)
+        assertFalse(result[1].isDuet)
+        assertFalse(result[2].isDuet)
+    }
+
     private fun createLine(text: String): LyricLine {
         return LyricLine(
             startTime = 0,
