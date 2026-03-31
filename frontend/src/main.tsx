@@ -436,18 +436,11 @@ function App() {
         // Re-apply current time after lyrics land so the player can snap to the active line.
         if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
           logToAndroid(`Force update LyricPlayer time to ${currentTimeRef.current} after setting lyrics`, 'info')
+          playerRef.current.lyricPlayer.setIsSeeking(isSeekingRef.current)
           playerRef.current.lyricPlayer.setCurrentTime(
             Math.trunc(currentTimeRef.current),
             isSeekingRef.current,
           )
-              
-          // Trigger one extra layout tick so mask-based word highlighting recalculates.
-          setTimeout(() => {
-            if (playerRef.current?.lyricPlayer) {
-              logToAndroid('Triggering mask-image recalculation', 'debug')
-              playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTimeRef.current), true)
-            }
-          }, 100)
         }
       } catch (error) {
         logToAndroid(`updateLyrics error: ${(error as Error).message}`, 'error')
@@ -483,6 +476,7 @@ function App() {
         logToAndroid(`Updated TTML lyrics (${normalizedLines.length} lines)`, 'debug')
 
         if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
+          playerRef.current.lyricPlayer.setIsSeeking(isSeekingRef.current)
           playerRef.current.lyricPlayer.setCurrentTime(
             Math.trunc(currentTimeRef.current),
             isSeekingRef.current,
@@ -504,9 +498,11 @@ function App() {
       const seekNow = isSeekingRef.current
       // Keep the core player in sync immediately, not just through React state.
       if (playerRef.current?.lyricPlayer) {
+        playerRef.current.lyricPlayer.setIsSeeking(seekNow)
         playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), seekNow)
       }
       if (seekNow) {
+        playerRef.current?.lyricPlayer?.setIsSeeking(false)
         isSeekingRef.current = false
         setIsSeeking(false)
       }
@@ -539,6 +535,7 @@ function App() {
     window.setSeeking = function (seeking: boolean) {
       const nextSeeking = !!seeking
       isSeekingRef.current = nextSeeking
+      playerRef.current?.lyricPlayer?.setIsSeeking(nextSeeking)
       setIsSeeking(nextSeeking)
       logToAndroid(`Seeking state updated: ${nextSeeking}`, 'debug')
     }
@@ -723,9 +720,7 @@ function App() {
         ref={playerRef}
         lyricPlayer={renderMode === 'dom-lite' ? DomSlimLyricPlayer : undefined}
         lyricLines={lyricLines}
-        currentTime={currentTime}
         playing={musicIsPlaying}
-        isSeeking={isSeeking}
         disabled={false}
         enableSpring={motionConfig.enableSpring}
         enableBlur={motionConfig.enableBlur}

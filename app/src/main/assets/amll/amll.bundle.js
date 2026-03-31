@@ -42246,6 +42246,15 @@ void main(void)
     getCurrentPosition() {
       return this.currentPosition;
     }
+    getTargetPosition() {
+      return this.targetPosition;
+    }
+    getPendingTargetPosition() {
+      return this.queuePosition?.position;
+    }
+    getPendingTargetDelay() {
+      return this.queuePosition?.time;
+    }
   };
   function Pe$1(e7, t2, n2, r2 = 0, i2) {
     let a2 = i2?.soft ?? false, o2 = i2?.stiffness ?? 100, s2 = i2?.damping ?? 10, c2 = i2?.mass ?? 1, l2 = n2 - e7;
@@ -42609,6 +42618,12 @@ void main(void)
     getOverscanPx() {
       return this.overscanPx;
     }
+    getScrollToIndex() {
+      return this.scrollToIndex;
+    }
+    getLyricLineIndex(e7) {
+      return this.lyricLinesIndexes.get(e7);
+    }
     setEnableSpring(e7 = true) {
       this.disableSpring = !e7, e7 ? this.element.classList.remove(I$1.disableSpring) : this.element.classList.add(I$1.disableSpring), this.calcLayout(true);
     }
@@ -42642,7 +42657,7 @@ void main(void)
       }
       this.hasDuetLine = this.processedLines.some((e8) => e8.isDuet);
       for (let e8 of this.currentLyricLineObjects) e8.dispose();
-      this.interludeDots.setInterlude(void 0), this.hotLines.clear(), this.bufferedLines.clear(), this.setCurrentTime(0, true);
+      this.interludeDots.setInterlude(void 0), this.hotLines.clear(), this.bufferedLines.clear(), this.setCurrentTime(t2, true);
     }
     getIsPlaying() {
       return this.isPlaying;
@@ -42717,8 +42732,7 @@ void main(void)
       return t2;
     }
     resolveScrollAnchorIndex() {
-      let e7 = this.findLatestMainLineIndex(this.hotLines);
-      return e7 === void 0 ? this.findLatestMainLineIndex(this.bufferedLines) : e7;
+      return this.findLatestMainLineIndex(this.hotLines);
     }
     updateDynamicSpringParams() {
       if (!this.getEnableSpring() || this.processedLines.length === 0) return;
@@ -42734,47 +42748,47 @@ void main(void)
       }
     }
     async calcLayout(e7 = false, t2 = false) {
-      let n2 = this.getCurrentInterlude(), r2 = !!n2;
-      (this.targetAlignIndex !== this.scrollToIndex || this.lastInterludeState !== r2) && (this.lastInterludeState = r2, this.isSeeking || r2 ? this.setLinePosYSpringParams({
+      let n2 = this.getCurrentInterlude(), r2 = !!n2, i2 = this.targetAlignIndex !== this.scrollToIndex, a2 = this.lastInterludeState !== r2, o2 = !e7 && (i2 || a2);
+      (i2 || a2) && (this.lastInterludeState = r2, this.isSeeking || r2 ? this.setLinePosYSpringParams({
         stiffness: 90,
         damping: 15
       }) : this.updateDynamicSpringParams());
-      let i2 = -this.scrollOffset, a2 = this.scrollToIndex, o2 = false;
-      n2 ? o2 = n2[3] : this.interludeDots.setInterlude(void 0);
-      let s2 = (this.baseFontSize || 24) * 0.4, c2 = this.interludeDotsSize[1] + s2 * 2;
-      n2 && n2[2] !== -1 && (i2 -= c2);
-      let l2 = this.size[1] / 5, u2 = this.currentLyricLineObjects.slice(0, a2).reduce((e8, t3) => e8 + (t3.getLine().isBG && this.isPlaying ? 0 : this.lyricLinesSize.get(t3)?.[1] ?? l2), 0);
-      this.scrollBoundary[0] = -u2, i2 -= u2, i2 += this.size[1] * this.alignPosition;
-      let d2 = this.currentLyricLineObjects[a2];
-      this.targetAlignIndex = a2;
-      let f2 = a2 === this.currentLyricLineObjects.length;
-      this.bottomLine.setFocused(f2);
-      let p2 = 0;
-      if (d2 ? p2 = this.lyricLinesSize.get(d2)?.[1] ?? l2 : f2 && (p2 = this.bottomLine.lineSize[1]), p2 > 0) switch (this.alignAnchor) {
+      let s2 = -this.scrollOffset, c2 = this.scrollToIndex, l2 = false;
+      n2 ? l2 = n2[3] : this.interludeDots.setInterlude(void 0);
+      let u2 = (this.baseFontSize || 24) * 0.4, d2 = this.interludeDotsSize[1] + u2 * 2;
+      n2 && n2[2] !== -1 && (s2 -= d2);
+      let f2 = this.size[1] / 5, p2 = this.currentLyricLineObjects.slice(0, c2).reduce((e8, t3) => e8 + (t3.getLine().isBG && this.isPlaying ? 0 : this.lyricLinesSize.get(t3)?.[1] ?? f2), 0);
+      this.scrollBoundary[0] = -p2, s2 -= p2, s2 += this.size[1] * this.alignPosition;
+      let m2 = this.currentLyricLineObjects[c2];
+      this.targetAlignIndex = c2;
+      let h2 = c2 === this.currentLyricLineObjects.length;
+      this.bottomLine.setFocused(h2);
+      let g2 = 0;
+      if (m2 ? g2 = this.lyricLinesSize.get(m2)?.[1] ?? f2 : h2 && (g2 = this.bottomLine.lineSize[1]), g2 > 0) switch (this.alignAnchor) {
         case "bottom":
-          i2 -= p2;
+          s2 -= g2;
           break;
         case "center":
-          i2 -= p2 / 2;
+          s2 -= g2 / 2;
           break;
       }
-      let m2 = Math.max(...this.bufferedLines), h2 = 0, g2 = e7 ? 0 : 0.05, _2 = false;
+      let _2 = Math.max(...this.bufferedLines), v2 = 0, y2 = o2 ? 0.05 : 0, b2 = false;
       this.currentLyricLineObjects.forEach((e8, r3) => {
-        let a3 = this.bufferedLines.has(r3), c3 = a3 || r3 >= this.scrollToIndex && r3 < m2, u3 = e8.getLine(), d3 = n2 && r3 === n2[2] + 1;
-        if (!_2 && d3) {
-          _2 = true, i2 += s2;
+        let i3 = this.bufferedLines.has(r3), a3 = i3 || r3 >= this.scrollToIndex && r3 < _2, c3 = e8.getLine(), d3 = n2 && r3 === n2[2] + 1;
+        if (!b2 && d3) {
+          b2 = true, s2 += u2;
           let e9 = 0;
-          n2 && o2 && (e9 = this.size[0] - this.interludeDotsSize[0]), this.interludeDots.setTransform(e9, i2), n2 && this.interludeDots.setInterlude([n2[0], n2[1]]), i2 += this.interludeDotsSize[1], i2 += s2;
+          n2 && l2 && (e9 = this.size[0] - this.interludeDotsSize[0]), this.interludeDots.setTransform(e9, s2), n2 && this.interludeDots.setInterlude([n2[0], n2[1]]), s2 += this.interludeDotsSize[1], s2 += u2;
         }
-        let f3;
-        f3 = this.hidePassedLines && r3 < (n2 ? n2[2] + 1 : this.scrollToIndex) && this.isPlaying ? 1e-5 : a3 ? 0.85 : this.isNonDynamic ? 0.2 : 1;
-        let p3 = this.calculateBlur(r3, c3, m2), v3 = this.enableScale ? 97 : 100, y3 = 100;
-        !c3 && this.isPlaying && (y3 = u3.isBG ? 75 : v3);
-        let b2 = c3 ? $$1.GRADIENT : $$1.SOLID;
-        e8.setTransform(i2, y3, f3, p3, t2, h2, b2), u3.isBG && (c3 || !this.isPlaying) ? i2 += this.lyricLinesSize.get(e8)?.[1] ?? l2 : u3.isBG || (i2 += this.lyricLinesSize.get(e8)?.[1] ?? l2), i2 >= 0 && !this.isSeeking && (u3.isBG || (h2 += g2), r3 >= this.scrollToIndex && (g2 /= 1.05));
-      }), this.scrollBoundary[1] = i2 + this.scrollOffset - this.size[1] / 2;
-      let v2 = this.currentLyricLineObjects.length, y2 = this.calculateBlur(v2, f2, m2);
-      this.bottomLine.setTransform(0, i2, y2, t2, h2);
+        let p3;
+        p3 = this.hidePassedLines && r3 < (n2 ? n2[2] + 1 : this.scrollToIndex) && this.isPlaying ? 1e-5 : i3 ? 0.85 : this.isNonDynamic ? 0.2 : 1;
+        let m3 = this.calculateBlur(r3, a3, _2), h3 = this.enableScale ? 97 : 100, g3 = 100;
+        !a3 && this.isPlaying && (g3 = c3.isBG ? 75 : h3);
+        let x3 = a3 ? $$1.GRADIENT : $$1.SOLID;
+        e8.setTransform(s2, g3, p3, m3, t2, v2, x3), c3.isBG && (a3 || !this.isPlaying) ? s2 += this.lyricLinesSize.get(e8)?.[1] ?? f2 : c3.isBG || (s2 += this.lyricLinesSize.get(e8)?.[1] ?? f2), o2 && s2 >= 0 && !this.isSeeking && (c3.isBG || (v2 += y2), r3 >= this.scrollToIndex && (y2 /= 1.05));
+      }), this.scrollBoundary[1] = s2 + this.scrollOffset - this.size[1] / 2;
+      let x2 = this.currentLyricLineObjects.length, S2 = this.calculateBlur(x2, h2, _2);
+      this.bottomLine.setTransform(0, s2, S2, t2, v2);
     }
     calculateBlur(e7, t2, n2) {
       if (!this.enableBlur || this.isUserScrolling || t2) return 0;
@@ -43103,11 +43117,12 @@ void main(void)
     }
     _prevParentEl;
     lastStyle = "";
+    lastSpringTransformKey = "";
     show() {
       this.element.parentElement || (this._prevParentEl.appendChild(this.element), this.lyricPlayer.resizeObserver.observe(this.element)), this.built || (this.rebuildElement(), this.built = true, this.updateMaskImageSync()), this.rebuildStyle();
     }
     hide() {
-      this.element.parentElement && (this._prevParentEl.removeChild(this.element), this.lyricPlayer.resizeObserver.unobserve(this.element)), this.built &&= (this.disposeElements(), false);
+      this.element.parentElement && (this._prevParentEl.removeChild(this.element), this.lyricPlayer.resizeObserver.unobserve(this.element));
     }
     rebuildStyle() {
       let e7 = "";
@@ -43375,16 +43390,16 @@ void main(void)
       super.setTransform(e7, t2, n2, r2, i2, a2), this.renderMode = o2;
       let s2 = this.isInSight, c2 = this.lyricPlayer.getEnableSpring();
       this.top = e7, this.scale = t2, this.delay = a2 * 1e3 | 0;
-      let l2 = this.element.children[0], u2 = this.element.children[1], d2 = this.element.children[2], f2 = n2 * (this.lyricPlayer._getIsNonDynamic() ? 0.5 : 0.3);
-      if (l2.style.opacity = `${n2}`, u2.style.opacity = `${f2}`, d2.style.opacity = `${f2}`, i2 || !c2) {
-        if (this.blur = Math.min(32, r2), this.lineTransforms.posY.setPosition(e7), this.lineTransforms.scale.setPosition(t2), c2) this.rebuildStyle();
+      let l2 = `${e7.toFixed(3)}|${t2.toFixed(3)}|${this.delay}`, u2 = this.element.children[0], d2 = this.element.children[1], f2 = this.element.children[2], p2 = n2 * (this.lyricPlayer._getIsNonDynamic() ? 0.5 : 0.3);
+      if (u2.style.opacity = `${n2}`, d2.style.opacity = `${p2}`, f2.style.opacity = `${p2}`, i2 || !c2) {
+        if (this.blur = Math.min(32, r2), this.lineTransforms.posY.setPosition(e7), this.lineTransforms.scale.setPosition(t2), this.lastSpringTransformKey = l2, c2) this.rebuildStyle();
         else {
           let e8 = this.isInSight;
           s2 || e8 ? this.show() : this.hide();
         }
         let n3 = this.lineTransforms.scale.getCurrentPosition();
         this.updateMaskAlphaTargets(n3 / 100), this.currentBrightAlpha = this.targetBrightAlpha, this.currentDarkAlpha = this.targetDarkAlpha, this.element.style.setProperty("--bright-mask-alpha", String(this.currentBrightAlpha)), this.element.style.setProperty("--dark-mask-alpha", String(this.currentDarkAlpha));
-      } else if (this.lineTransforms.posY.setTargetPosition(e7, a2), this.lineTransforms.scale.setTargetPosition(t2), this.blur !== Math.min(5, r2)) {
+      } else if (this.lastSpringTransformKey !== l2 && (this.lineTransforms.posY.setTargetPosition(e7, a2), this.lineTransforms.scale.setTargetPosition(t2), this.lastSpringTransformKey = l2), this.blur !== Math.min(5, r2)) {
         this.blur = Math.min(5, r2);
         let e8 = r2.toFixed(3);
         this.element.style.filter = `blur(${e8}px)`;
@@ -43399,9 +43414,20 @@ void main(void)
     _getDebugTargetPos() {
       return `[位移: ${this.top}; 缩放: ${this.scale}; 延时: ${this.delay}]`;
     }
-    get isInSight() {
-      let e7 = this.lineTransforms.posY.getCurrentPosition(), t2 = this.lyricPlayer.lyricLinesSize.get(this)?.[1] ?? 0, n2 = e7 + t2, r2 = this.lyricPlayer.size[1], i2 = this.lyricPlayer.getOverscanPx();
+    isInFocusWindow() {
+      let e7 = this.lyricPlayer.getLyricLineIndex(this);
+      if (e7 === void 0) return false;
+      let t2 = this.lyricPlayer.getScrollToIndex();
+      return e7 >= t2 - 2 && e7 <= t2 + 2;
+    }
+    isPositionInSight(e7) {
+      let t2 = this.lyricPlayer.lyricLinesSize.get(this)?.[1] ?? 0, n2 = e7 + t2, r2 = this.lyricPlayer.size[1], i2 = this.lyricPlayer.getOverscanPx();
       return !(e7 > r2 + t2 + i2 || n2 < -t2 - i2);
+    }
+    get isInSight() {
+      if (this.isInFocusWindow()) return true;
+      let e7 = this.lineTransforms.posY.getCurrentPosition(), t2 = this.lineTransforms.posY.getTargetPosition(), n2 = this.lineTransforms.posY.getPendingTargetPosition();
+      return this.isPositionInSight(e7) || this.isPositionInSight(t2) || n2 !== void 0 && this.isPositionInSight(n2);
     }
     disposeElements() {
       for (let e8 of this.splittedWords) {
@@ -43710,6 +43736,7 @@ void main(void)
   var At$1 = class At extends G$1 {
     element = document.createElement("div");
     splittedWords = [];
+    lastSpringTransformKey = "";
     lineSize = [0, 0];
     constructor(e7, t2 = {
       words: [],
@@ -44050,9 +44077,9 @@ void main(void)
       super.setTransform(e7, t2, n2, r2, i2, a2);
       let o2 = this.isInSight, s2 = this.lyricPlayer.getEnableSpring();
       this.top = e7, this.scale = t2, this.delay = a2 * 1e3 | 0;
-      let c2 = this.element.children[0];
-      if (c2.style.opacity = `${n2}`, i2 || !s2) {
-        if (i2 && this.element.classList.add(X$1.tmpDisableTransition), this.lineTransforms.posY.setPosition(e7), this.lineTransforms.scale.setPosition(t2), s2) this.rebuildStyle();
+      let c2 = `${e7.toFixed(3)}|${t2.toFixed(3)}|${this.delay}`, l2 = this.element.children[0];
+      if (l2.style.opacity = `${n2}`, i2 || !s2) {
+        if (i2 && this.element.classList.add(X$1.tmpDisableTransition), this.lineTransforms.posY.setPosition(e7), this.lineTransforms.scale.setPosition(t2), this.lastSpringTransformKey = c2, s2) this.rebuildStyle();
         else {
           let e8 = this.isInSight;
           o2 || e8 ? this.show() : this.hide();
@@ -44060,7 +44087,7 @@ void main(void)
         i2 && requestAnimationFrame(() => {
           this.element.classList.remove(X$1.tmpDisableTransition);
         });
-      } else this.lineTransforms.posY.setTargetPosition(e7, a2), this.lineTransforms.scale.setTargetPosition(t2);
+      } else this.lastSpringTransformKey !== c2 && (this.lineTransforms.posY.setTargetPosition(e7, a2), this.lineTransforms.scale.setTargetPosition(t2), this.lastSpringTransformKey = c2);
     }
     update(e7 = 0) {
       if (this.lyricPlayer.getEnableSpring()) if (this.lineTransforms.posY.update(e7), this.lineTransforms.scale.update(e7), this.isInSight ? (this.show(), this.maskImageDirty && this.updateMaskImage()) : this.hide(), this.lyricPlayer.getEnableSpring()) this.element.style.setProperty("--bright-mask-alpha", `${Math.max(0, Math.min(1, this.lineTransforms.scale.getCurrentPosition() / 100 - 0.97) / 0.03) * 0.8 + 0.2}`), this.element.style.setProperty("--dark-mask-alpha", `${Math.max(0, Math.min(1, this.lineTransforms.scale.getCurrentPosition() / 100 - 0.97) / 0.03) * 0.2 + 0.2}`);
@@ -44072,9 +44099,20 @@ void main(void)
     _getDebugTargetPos() {
       return `[位移: ${this.top}; 缩放: ${this.scale}; 延时: ${this.delay}]`;
     }
+    isInFocusWindow() {
+      let e7 = this.lyricPlayer.getLyricLineIndex(this);
+      if (e7 === void 0) return false;
+      let t2 = this.lyricPlayer.getScrollToIndex();
+      return e7 >= t2 - 2 && e7 <= t2 + 2;
+    }
+    isPositionInSight(e7) {
+      let t2 = this.lineSize[1], n2 = e7 + t2, r2 = this.lyricPlayer.size[1], i2 = this.lyricPlayer.getOverscanPx();
+      return !(e7 > r2 + t2 + i2 || n2 < -t2 - i2);
+    }
     get isInSight() {
-      let e7 = this.lineTransforms.posY.getCurrentPosition(), t2 = this.lineSize[1], n2 = e7 + t2;
-      return !(e7 > this.lyricPlayer.size[1] + t2 || n2 < -t2);
+      if (this.isInFocusWindow()) return true;
+      let e7 = this.lineTransforms.posY.getCurrentPosition(), t2 = this.lineTransforms.posY.getTargetPosition(), n2 = this.lineTransforms.posY.getPendingTargetPosition();
+      return this.isPositionInSight(e7) || this.isPositionInSight(t2) || n2 !== void 0 && this.isPositionInSight(n2);
     }
     disposeElements() {
       for (let e7 of this.splittedWords) {
@@ -44190,17 +44228,17 @@ void main(void)
       t2,
       n2
     ]), reactExports.useEffect(() => {
-      S2 && r2 && y2.current?.setFPS(r2);
+      S2 && r2 !== void 0 && y2.current?.setFPS(r2);
     }, [S2, r2]), reactExports.useEffect(() => {
       S2 && (i2 === void 0 || i2 ? y2.current?.resume() : y2.current?.pause());
     }, [S2, i2]), reactExports.useEffect(() => {
-      S2 && o2 && y2.current?.setFlowSpeed(o2);
+      S2 && o2 !== void 0 && y2.current?.setFlowSpeed(o2);
     }, [S2, o2]), reactExports.useEffect(() => {
       S2 && y2.current?.setStaticMode(u2 ?? false);
     }, [S2, u2]), reactExports.useEffect(() => {
-      S2 && s2 && y2.current?.setRenderScale(s2 ?? 0.5);
+      S2 && s2 !== void 0 && y2.current?.setRenderScale(s2 ?? 0.5);
     }, [S2, s2]), reactExports.useEffect(() => {
-      S2 && f2 && y2.current?.setLowFreqVolume(f2 ?? 1);
+      S2 && f2 !== void 0 && y2.current?.setLowFreqVolume(f2 ?? 1);
     }, [S2, f2]), reactExports.useEffect(() => {
       S2 && p2 !== void 0 && y2.current?.setHasLyric(p2 ?? true);
     }, [S2, p2]), reactExports.useEffect(() => {
@@ -44227,7 +44265,10 @@ void main(void)
         e3?.dispose(), F2(void 0);
       };
     }, [k2]), reactExports.useLayoutEffect(() => {
-      x2 === void 0 ? (P2?.setLyricLines([]), P2?.update()) : (P2?.setLyricLines(x2, L2.current), P2?.update());
+      if (x2 !== void 0) {
+        let e3 = L2.current ?? P2?.getCurrentTime?.() ?? 0;
+        P2?.setLyricLines(x2, e3), P2?.update();
+      } else P2?.setLyricLines([]), P2?.update();
     }, [P2, x2]), reactExports.useEffect(() => {
       if (!e2) {
         let e3 = false, t3 = -1, n2 = (r2) => {
@@ -44252,7 +44293,7 @@ void main(void)
     }, [P2, _2]), reactExports.useEffect(() => {
       P2?.setEnableBlur(s2 ?? true);
     }, [P2, s2]), reactExports.useEffect(() => {
-      S2 === void 0 ? P2?.setCurrentTime(0) : (P2?.setCurrentTime(S2, C2), L2.current = S2);
+      S2 === void 0 ? L2.current === void 0 && (L2.current = P2?.getCurrentTime?.() ?? 0) : (P2?.setCurrentTime(S2, C2), L2.current = S2);
     }, [
       P2,
       S2,
@@ -52256,16 +52297,11 @@ void main(void)
           logToAndroid(`Updated lyrics (${normalizedLines.length} lines)`, "debug");
           if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
             logToAndroid(`Force update LyricPlayer time to ${currentTimeRef.current} after setting lyrics`, "info");
+            playerRef.current.lyricPlayer.setIsSeeking(isSeekingRef.current);
             playerRef.current.lyricPlayer.setCurrentTime(
               Math.trunc(currentTimeRef.current),
               isSeekingRef.current
             );
-            setTimeout(() => {
-              if (playerRef.current?.lyricPlayer) {
-                logToAndroid("Triggering mask-image recalculation", "debug");
-                playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(currentTimeRef.current), true);
-              }
-            }, 100);
           }
         } catch (error) {
           logToAndroid(`updateLyrics error: ${error.message}`, "error");
@@ -52294,6 +52330,7 @@ void main(void)
           setLyricLines(normalizedLines);
           logToAndroid(`Updated TTML lyrics (${normalizedLines.length} lines)`, "debug");
           if (playerRef.current?.lyricPlayer && currentTimeRef.current > 0) {
+            playerRef.current.lyricPlayer.setIsSeeking(isSeekingRef.current);
             playerRef.current.lyricPlayer.setCurrentTime(
               Math.trunc(currentTimeRef.current),
               isSeekingRef.current
@@ -52312,9 +52349,11 @@ void main(void)
         setCurrentTime(parsedTime);
         const seekNow = isSeekingRef.current;
         if (playerRef.current?.lyricPlayer) {
+          playerRef.current.lyricPlayer.setIsSeeking(seekNow);
           playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), seekNow);
         }
         if (seekNow) {
+          playerRef.current?.lyricPlayer?.setIsSeeking(false);
           isSeekingRef.current = false;
           setIsSeeking(false);
         }
@@ -52341,6 +52380,7 @@ void main(void)
       window.setSeeking = function(seeking) {
         const nextSeeking = !!seeking;
         isSeekingRef.current = nextSeeking;
+        playerRef.current?.lyricPlayer?.setIsSeeking(nextSeeking);
         setIsSeeking(nextSeeking);
         logToAndroid(`Seeking state updated: ${nextSeeking}`, "debug");
       };
@@ -52498,9 +52538,7 @@ void main(void)
           ref: playerRef,
           lyricPlayer: renderMode === "dom-lite" ? jt$1 : void 0,
           lyricLines,
-          currentTime,
           playing: musicIsPlaying,
-          isSeeking,
           disabled: false,
           enableSpring: motionConfig.enableSpring,
           enableBlur: motionConfig.enableBlur,

@@ -221,6 +221,7 @@ fun AMLLLyricsView(
     var lastMotionConfigValue by remember { mutableStateOf<String?>(null) }
     var pendingSeekTargetMs by remember { mutableStateOf<Long?>(null) }
     var pendingSeekIssuedAtMs by remember { mutableStateOf<Long?>(null) }
+    var lastSentIsPlayingToWebView by remember { mutableStateOf<Boolean?>(null) }
     
     // 记录上次发送的状态，用于去重
     var lastSentMusicId by remember { mutableStateOf<String?>(null) }
