@@ -110,12 +110,30 @@ interface LyricMotionConfig {
   wordFadeWidth: number
 }
 
+interface RGBColor {
+  r: number
+  g: number
+  b: number
+}
+
+interface FlowGlowPalette {
+  primary: RGBColor
+  secondary: RGBColor
+  shadow: RGBColor
+}
+
 const DEFAULT_MOTION_CONFIG: LyricMotionConfig = {
   enableSpring: true,
   enableBlur: true,
   enableScale: true,
   hidePassedLines: false,
   wordFadeWidth: 0.5,
+}
+
+const DEFAULT_FLOW_GLOW_PALETTE: FlowGlowPalette = {
+  primary: { r: 126, g: 170, b: 255 },
+  secondary: { r: 255, g: 136, b: 208 },
+  shadow: { r: 88, g: 118, b: 192 },
 }
 
 let player: LyricPlayerRef | null = null
@@ -132,18 +150,95 @@ interface AMLLGlobal {
 // Downstream override for AMLL mask variable initialization.
 function applyAMLLPatch() {
   logToAndroid('Applying AMLL patch for generateFadeGradient', 'info')
-  
+
+  if (document.getElementById('amll-runtime-patch')) return
+
   // Ensure mask-related CSS variables always have safe defaults.
   const style = document.createElement('style')
+  style.id = 'amll-runtime-patch'
   style.textContent = `
     /* Keep mask-image CSS variables initialized. */
     :root {
       --bright-mask-alpha: 1.0;
       --dark-mask-alpha: 0.2;
+      --amll-glow-primary: 126, 170, 255;
+      --amll-glow-secondary: 255, 136, 208;
+      --amll-glow-shadow: 88, 118, 192;
+    }
+
+    .amll-flow-outline-layer {
+      position: absolute;
+      inset: clamp(10px, 2.2vw, 24px);
+      border-radius: clamp(22px, 5vw, 40px);
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    .amll-flow-outline-core,
+    .amll-flow-outline-halo {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+    }
+
+    .amll-flow-outline-core {
+      padding: clamp(1.5px, 0.35vw, 3px);
+      background:
+        conic-gradient(
+          from 0deg at 50% 50%,
+          rgba(var(--amll-glow-primary), 0.03) 0deg,
+          rgba(var(--amll-glow-secondary), 0.78) 76deg,
+          rgba(var(--amll-glow-primary), 0.25) 168deg,
+          rgba(var(--amll-glow-secondary), 0.66) 248deg,
+          rgba(var(--amll-glow-primary), 0.1) 320deg,
+          rgba(var(--amll-glow-primary), 0.03) 360deg
+        );
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      transform-origin: center;
+      animation: amll-flow-outline-spin 9.5s linear infinite;
+    }
+
+    .amll-flow-outline-halo {
+      inset: -12px;
+      background:
+        radial-gradient(circle at 24% 18%, rgba(var(--amll-glow-primary), 0.3), transparent 58%),
+        radial-gradient(circle at 82% 84%, rgba(var(--amll-glow-secondary), 0.28), transparent 62%),
+        radial-gradient(circle at 50% 50%, rgba(var(--amll-glow-shadow), 0.2), transparent 72%);
+      filter: blur(16px) saturate(1.18);
+      opacity: 0.86;
+      animation: amll-flow-halo-drift 12s ease-in-out infinite alternate;
+    }
+
+    @keyframes amll-flow-outline-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes amll-flow-halo-drift {
+      0% {
+        transform: translate3d(-2%, -1.5%, 0) scale(0.98);
+        opacity: 0.78;
+      }
+      100% {
+        transform: translate3d(2%, 1.5%, 0) scale(1.03);
+        opacity: 0.95;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .amll-flow-outline-core,
+      .amll-flow-outline-halo {
+        animation: none !important;
+      }
     }
   `
   document.head.appendChild(style)
-  
+
   logToAndroid('AMLL patch applied successfully', 'debug')
 }
 
@@ -202,6 +297,208 @@ function parseBackgroundRenderer(value: unknown): BackgroundRendererKey | undefi
     return 'mesh'
   }
   return undefined
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value))
+}
+
+function roundRgb(value: number): number {
+  return Math.trunc(clamp(value, 0, 255))
+}
+
+function toCssColorChannels(color: RGBColor): string {
+  return `${roundRgb(color.r)}, ${roundRgb(color.g)}, ${roundRgb(color.b)}`
+}
+
+function rgbToHsl(color: RGBColor): { h: number; s: number; l: number } {
+  const r = clamp(color.r / 255, 0, 1)
+  const g = clamp(color.g / 255, 0, 1)
+  const b = clamp(color.b / 255, 0, 1)
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  const delta = max - min
+  let h = 0
+  const l = (max + min) / 2
+  const s = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l - 1))
+
+  if (delta !== 0) {
+    if (max === r) {
+      h = ((g - b) / delta) % 6
+    } else if (max === g) {
+      h = (b - r) / delta + 2
+    } else {
+      h = (r - g) / delta + 4
+    }
+    h /= 6
+    if (h < 0) h += 1
+  }
+
+  return { h, s: clamp(s, 0, 1), l: clamp(l, 0, 1) }
+}
+
+function hueToRgb(p: number, q: number, t: number): number {
+  let normalized = t
+  if (normalized < 0) normalized += 1
+  if (normalized > 1) normalized -= 1
+  if (normalized < 1 / 6) return p + (q - p) * 6 * normalized
+  if (normalized < 1 / 2) return q
+  if (normalized < 2 / 3) return p + (q - p) * (2 / 3 - normalized) * 6
+  return p
+}
+
+function hslToRgb(h: number, s: number, l: number): RGBColor {
+  const hue = ((h % 1) + 1) % 1
+  const sat = clamp(s, 0, 1)
+  const light = clamp(l, 0, 1)
+  if (sat === 0) {
+    const gray = roundRgb(light * 255)
+    return { r: gray, g: gray, b: gray }
+  }
+
+  const q = light < 0.5 ? light * (1 + sat) : light + sat - light * sat
+  const p = 2 * light - q
+
+  return {
+    r: roundRgb(hueToRgb(p, q, hue + 1 / 3) * 255),
+    g: roundRgb(hueToRgb(p, q, hue) * 255),
+    b: roundRgb(hueToRgb(p, q, hue - 1 / 3) * 255),
+  }
+}
+
+function blendColor(from: RGBColor, to: RGBColor, ratio: number): RGBColor {
+  const t = clamp(ratio, 0, 1)
+  const inv = 1 - t
+  return {
+    r: roundRgb(from.r * inv + to.r * t),
+    g: roundRgb(from.g * inv + to.g * t),
+    b: roundRgb(from.b * inv + to.b * t),
+  }
+}
+
+function applyBackgroundLikeToneMap(color: RGBColor): RGBColor {
+  // Keep the glow palette close to AMLL background color processing.
+  let r = color.r
+  let g = color.g
+  let b = color.b
+
+  r = (r - 128) * 0.4 + 128
+  g = (g - 128) * 0.4 + 128
+  b = (b - 128) * 0.4 + 128
+
+  const gray = r * 0.3 + g * 0.59 + b * 0.11
+  r = gray * -2.0 + r * 3.0
+  g = gray * -2.0 + g * 3.0
+  b = gray * -2.0 + b * 3.0
+
+  r = (r - 128) * 1.7 + 128
+  g = (g - 128) * 1.7 + 128
+  b = (b - 128) * 1.7 + 128
+
+  return {
+    r: roundRgb(r * 0.75),
+    g: roundRgb(g * 0.75),
+    b: roundRgb(b * 0.75),
+  }
+}
+
+function loadImage(source: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image()
+    img.decoding = 'async'
+    img.crossOrigin = 'anonymous'
+    img.onload = () => resolve(img)
+    img.onerror = () => reject(new Error('Failed to load album art image'))
+    img.src = source
+  })
+}
+
+async function extractFlowGlowPalette(source: string): Promise<FlowGlowPalette> {
+  const albumSource = String(source ?? '').trim()
+  if (!albumSource) return DEFAULT_FLOW_GLOW_PALETTE
+
+  const image = await loadImage(albumSource)
+  const canvas = document.createElement('canvas')
+  const sampleSize = 56
+  canvas.width = sampleSize
+  canvas.height = sampleSize
+  const ctx = canvas.getContext('2d', { willReadFrequently: true })
+  if (!ctx) return DEFAULT_FLOW_GLOW_PALETTE
+
+  const width = image.naturalWidth || image.width
+  const height = image.naturalHeight || image.height
+  if (width <= 0 || height <= 0) return DEFAULT_FLOW_GLOW_PALETTE
+
+  ctx.clearRect(0, 0, sampleSize, sampleSize)
+  ctx.drawImage(image, 0, 0, width, height, 0, 0, sampleSize, sampleSize)
+
+  const imageData = ctx.getImageData(0, 0, sampleSize, sampleSize)
+  const pixels = imageData.data
+  let totalWeight = 0
+  let sumR = 0
+  let sumG = 0
+  let sumB = 0
+  let bestAccentScore = -Infinity
+  let accentCandidate: RGBColor | null = null
+
+  for (let i = 0; i < pixels.length; i += 4) {
+    const alpha = pixels[i + 3] / 255
+    if (alpha < 0.18) continue
+
+    const toned = applyBackgroundLikeToneMap({
+      r: pixels[i],
+      g: pixels[i + 1],
+      b: pixels[i + 2],
+    })
+    const { s, l } = rgbToHsl(toned)
+    if (l < 0.08 || l > 0.95) continue
+
+    const vibrantWeight = Math.max(0, s - 0.12) * 1.45
+    const luminanceWeight = Math.max(0, 1 - Math.abs(l - 0.55) * 1.8)
+    const weight = alpha * (0.22 + vibrantWeight + luminanceWeight * 0.9)
+
+    if (weight <= 0) continue
+
+    totalWeight += weight
+    sumR += toned.r * weight
+    sumG += toned.g * weight
+    sumB += toned.b * weight
+
+    const accentScore = s * 0.72 + luminanceWeight * 0.48
+    if (accentScore > bestAccentScore) {
+      bestAccentScore = accentScore
+      accentCandidate = toned
+    }
+  }
+
+  if (totalWeight <= 0.0001) return DEFAULT_FLOW_GLOW_PALETTE
+
+  const averageColor: RGBColor = {
+    r: roundRgb(sumR / totalWeight),
+    g: roundRgb(sumG / totalWeight),
+    b: roundRgb(sumB / totalWeight),
+  }
+
+  const primary = accentCandidate ? blendColor(averageColor, accentCandidate, 0.35) : averageColor
+  const primaryHsl = rgbToHsl(primary)
+
+  const secondary = hslToRgb(
+    primaryHsl.h + 0.11 + (1 - primaryHsl.s) * 0.07,
+    clamp(primaryHsl.s * 1.08 + 0.1, 0.34, 0.95),
+    clamp(primaryHsl.l * 1.07 + 0.06, 0.42, 0.8),
+  )
+
+  const shadow = hslToRgb(
+    primaryHsl.h - 0.08,
+    clamp(primaryHsl.s * 0.72 + 0.12, 0.22, 0.88),
+    clamp(primaryHsl.l * 0.48, 0.16, 0.44),
+  )
+
+  return {
+    primary,
+    secondary,
+    shadow,
+  }
 }
 
 const FALLBACK_WORD_DURATION_MS = 180
@@ -400,7 +697,9 @@ function App() {
   const [renderMode, setRenderModeState] = useState<RenderMode>('dom')
   const [backgroundConfig, setBackgroundConfig] = useState<BackgroundConfig>(DEFAULT_BACKGROUND_CONFIG)
   const [motionConfig, setMotionConfig] = useState(DEFAULT_MOTION_CONFIG)
+  const [flowGlowPalette, setFlowGlowPalette] = useState<FlowGlowPalette>(DEFAULT_FLOW_GLOW_PALETTE)
   const setLowFreqVolume = useSetAtom(lowFreqVolumeAtom)
+  const flowPaletteJobRef = useRef(0)
 
   // Initialize global state and Android bridge
   useEffect(() => {
@@ -500,11 +799,6 @@ function App() {
       if (playerRef.current?.lyricPlayer) {
         playerRef.current.lyricPlayer.setIsSeeking(seekNow)
         playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), seekNow)
-      }
-      if (seekNow) {
-        playerRef.current?.lyricPlayer?.setIsSeeking(false)
-        isSeekingRef.current = false
-        setIsSeeking(false)
       }
     }
 
@@ -620,6 +914,28 @@ function App() {
   }, [setLyricLines, setCurrentTime, setAlbumUri, setIsPlaying, setLowFreqVolume])
 
   useEffect(() => {
+    const paletteJobId = ++flowPaletteJobRef.current
+    const nextAlbum = typeof albumUri === 'string' && albumUri.trim().length > 0
+      ? albumUri.trim()
+      : demoAlbumArt
+    if (!nextAlbum) {
+      setFlowGlowPalette(DEFAULT_FLOW_GLOW_PALETTE)
+      return
+    }
+
+    void extractFlowGlowPalette(nextAlbum)
+      .then((nextPalette) => {
+        if (flowPaletteJobRef.current !== paletteJobId) return
+        setFlowGlowPalette(nextPalette)
+      })
+      .catch((error) => {
+        if (flowPaletteJobRef.current !== paletteJobId) return
+        setFlowGlowPalette(DEFAULT_FLOW_GLOW_PALETTE)
+        logToAndroid(`Flow glow palette fallback: ${(error as Error).message}`, 'warn')
+      })
+  }, [albumUri])
+
+  useEffect(() => {
     authorityTimeRef.current = currentTime
     authorityAtRef.current = getMonotonicTime()
     currentTimeRef.current = currentTime
@@ -695,8 +1011,17 @@ function App() {
     ? MeshGradientRenderer
     : PixiRenderer
 
+  const appStyle = {
+    position: 'relative',
+    width: '100%',
+    height: '100vh',
+    '--amll-glow-primary': toCssColorChannels(flowGlowPalette.primary),
+    '--amll-glow-secondary': toCssColorChannels(flowGlowPalette.secondary),
+    '--amll-glow-shadow': toCssColorChannels(flowGlowPalette.shadow),
+  } as React.CSSProperties
+
   return (
-    <div id="app" style={{ position: 'relative', width: '100%', height: '100vh' }}>
+    <div id="app" style={appStyle}>
       <BackgroundRender
         ref={(ref) => {
           if (ref?.bgRender) {
@@ -715,6 +1040,11 @@ function App() {
         hasLyric={lyricLines.length > 0}
         style={{ position: 'absolute', inset: 0, zIndex: 0 }}
       />
+
+      <div className="amll-flow-outline-layer" aria-hidden="true">
+        <div className="amll-flow-outline-core" />
+        <div className="amll-flow-outline-halo" />
+      </div>
 
       <LyricPlayer
         ref={playerRef}
@@ -735,7 +1065,7 @@ function App() {
         style={{
           position: 'absolute',
           inset: 0,
-          zIndex: 1,
+          zIndex: 2,
           width: '100%',
           height: '100%',
           fontFamily: 'var(--amll-lp-font-family, system-ui)',

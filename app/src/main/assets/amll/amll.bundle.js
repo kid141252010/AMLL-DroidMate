@@ -42507,6 +42507,13 @@ void main(void)
     wordFadeWidth = 0.5;
     targetAlignIndex = 0;
     lastInterludeState = false;
+    bgPreviewLeadMs = 250;
+    shouldShowBgLine(e7, t2 = this.currentTime) {
+      let n2 = this.processedLines[e7];
+      if (!n2?.isBG) return false;
+      let r2 = Math.max(0, n2.startTime - this.bgPreviewLeadMs), i2 = Math.max(r2, n2.endTime);
+      return t2 >= r2 && t2 < i2;
+    }
     constructor(e7) {
       super(), e7 && (this.element = e7), this.element.classList.add("amll-lyric-player"), this.resizeObserver.observe(this.element), this.resizeObserver.observe(this.interludeDots.getElement()), this.element.appendChild(this.interludeDots.getElement()), this.element.appendChild(this.bottomLine.getElement()), this.interludeDots.setTransform(0, 200), window.addEventListener("pageshow", this.onPageShow), window.addEventListener("pagehide", this.onPageHide);
       let t2 = 0, n2 = 0, r2 = 0, i2 = 0, a2 = 0, o2 = 0, s2 = 0, c2 = 0;
@@ -42669,10 +42676,8 @@ void main(void)
         let i3 = this.processedLines[r3];
         if (i3) {
           if (i3.isBG) {
-            if (i3.startTime > e7 || i3.endTime <= e7) {
-              let e8 = r3 - 1;
-              this.hotLines.has(e8) || (this.hotLines.delete(r3), n2.add(r3), t2 && this.currentLyricLineObjects[r3]?.disable());
-            }
+            let i4 = r3 - 1;
+            this.hotLines.has(i4) && this.shouldShowBgLine(r3, e7) || (this.hotLines.delete(r3), n2.add(r3), t2 && this.currentLyricLineObjects[r3]?.disable());
             continue;
           }
           let a2 = this.processedLines[r3 + 1];
@@ -42684,7 +42689,7 @@ void main(void)
       }
       this.currentLyricLineObjects.forEach((n3, r3, a2) => {
         let o2 = n3.getLine();
-        !o2.isBG && o2.startTime <= e7 && o2.endTime > e7 && (t2 && n3.enable(e7, this.isPlaying), this.hotLines.has(r3) || (this.hotLines.add(r3), i2.add(r3), t2 || n3.enable(), a2[r3 + 1]?.getLine()?.isBG && (this.hotLines.add(r3 + 1), i2.add(r3 + 1), t2 ? a2[r3 + 1].enable(e7, this.isPlaying) : a2[r3 + 1].enable())));
+        !o2.isBG && o2.startTime <= e7 && o2.endTime > e7 && (t2 && n3.enable(e7, this.isPlaying), this.hotLines.has(r3) || (this.hotLines.add(r3), i2.add(r3), t2 || n3.enable()), a2[r3 + 1]?.getLine()?.isBG && this.shouldShowBgLine(r3 + 1, e7) && (this.hotLines.has(r3 + 1) || (this.hotLines.add(r3 + 1), i2.add(r3 + 1), t2 || a2[r3 + 1].enable()), t2 && a2[r3 + 1].enable(e7, this.isPlaying)));
       });
       for (let e8 of this.bufferedLines) this.hotLines.has(e8) || (r2.add(e8), t2 && this.currentLyricLineObjects[e8]?.disable());
       if (t2) {
@@ -42748,7 +42753,7 @@ void main(void)
       }
     }
     async calcLayout(e7 = false, t2 = false) {
-      let n2 = this.getCurrentInterlude(), r2 = !!n2, i2 = this.targetAlignIndex !== this.scrollToIndex, a2 = this.lastInterludeState !== r2, o2 = !e7 && (i2 || a2);
+      let n2 = this.getCurrentInterlude(), r2 = !!n2, i2 = this.targetAlignIndex !== this.scrollToIndex, a2 = this.lastInterludeState !== r2, o2 = !e7;
       (i2 || a2) && (this.lastInterludeState = r2, this.isSeeking || r2 ? this.setLinePosYSpringParams({
         stiffness: 90,
         damping: 15
@@ -42774,18 +42779,18 @@ void main(void)
       }
       let _2 = Math.max(...this.bufferedLines), v2 = 0, y2 = o2 ? 0.05 : 0, b2 = false;
       this.currentLyricLineObjects.forEach((e8, r3) => {
-        let i3 = this.bufferedLines.has(r3), a3 = i3 || r3 >= this.scrollToIndex && r3 < _2, c3 = e8.getLine(), d3 = n2 && r3 === n2[2] + 1;
-        if (!b2 && d3) {
+        let i3 = e8.getLine(), a3 = this.bufferedLines.has(r3), c3 = i3.isBG ? a3 && this.shouldShowBgLine(r3) : a3, d3 = c3 || !i3.isBG && r3 >= this.scrollToIndex && r3 < _2, p3 = n2 && r3 === n2[2] + 1;
+        if (!b2 && p3) {
           b2 = true, s2 += u2;
           let e9 = 0;
           n2 && l2 && (e9 = this.size[0] - this.interludeDotsSize[0]), this.interludeDots.setTransform(e9, s2), n2 && this.interludeDots.setInterlude([n2[0], n2[1]]), s2 += this.interludeDotsSize[1], s2 += u2;
         }
-        let p3;
-        p3 = this.hidePassedLines && r3 < (n2 ? n2[2] + 1 : this.scrollToIndex) && this.isPlaying ? 1e-5 : i3 ? 0.85 : this.isNonDynamic ? 0.2 : 1;
-        let m3 = this.calculateBlur(r3, a3, _2), h3 = this.enableScale ? 97 : 100, g3 = 100;
-        !a3 && this.isPlaying && (g3 = c3.isBG ? 75 : h3);
-        let x3 = a3 ? $$1.GRADIENT : $$1.SOLID;
-        e8.setTransform(s2, g3, p3, m3, t2, v2, x3), c3.isBG && (a3 || !this.isPlaying) ? s2 += this.lyricLinesSize.get(e8)?.[1] ?? f2 : c3.isBG || (s2 += this.lyricLinesSize.get(e8)?.[1] ?? f2), o2 && s2 >= 0 && !this.isSeeking && (c3.isBG || (v2 += y2), r3 >= this.scrollToIndex && (y2 /= 1.05));
+        let m3;
+        m3 = this.hidePassedLines ? c3 ? 0.85 : r3 < (n2 ? n2[2] + 1 : this.scrollToIndex) && this.isPlaying ? 1e-5 : this.isNonDynamic ? 0.2 : 1 : c3 ? 0.85 : this.isNonDynamic ? 0.2 : 1;
+        let h3 = this.calculateBlur(r3, d3, _2), g3 = this.enableScale ? 97 : 100, x3 = 100;
+        !d3 && this.isPlaying && (x3 = i3.isBG ? 75 : g3);
+        let S3 = d3 ? $$1.GRADIENT : $$1.SOLID;
+        e8.setTransform(s2, x3, m3, h3, t2, v2, S3), i3.isBG && (c3 || !this.isPlaying) ? s2 += this.lyricLinesSize.get(e8)?.[1] ?? f2 : i3.isBG || (s2 += this.lyricLinesSize.get(e8)?.[1] ?? f2), o2 && s2 >= 0 && !this.isSeeking && (i3.isBG || (v2 += y2), r3 >= this.scrollToIndex && (y2 /= 1.05));
       }), this.scrollBoundary[1] = s2 + this.scrollOffset - this.size[1] / 2;
       let x2 = this.currentLyricLineObjects.length, S2 = this.calculateBlur(x2, h2, _2);
       this.bottomLine.setTransform(0, s2, S2, t2, v2);
@@ -52068,15 +52073,96 @@ void main(void)
     hidePassedLines: false,
     wordFadeWidth: 0.5
   };
+  const DEFAULT_FLOW_GLOW_PALETTE = {
+    primary: { r: 126, g: 170, b: 255 },
+    secondary: { r: 255, g: 136, b: 208 },
+    shadow: { r: 88, g: 118, b: 192 }
+  };
   let backgroundRender = null;
   function applyAMLLPatch() {
     logToAndroid("Applying AMLL patch for generateFadeGradient", "info");
+    if (document.getElementById("amll-runtime-patch")) return;
     const style = document.createElement("style");
+    style.id = "amll-runtime-patch";
     style.textContent = `
     /* Keep mask-image CSS variables initialized. */
     :root {
       --bright-mask-alpha: 1.0;
       --dark-mask-alpha: 0.2;
+      --amll-glow-primary: 126, 170, 255;
+      --amll-glow-secondary: 255, 136, 208;
+      --amll-glow-shadow: 88, 118, 192;
+    }
+
+    .amll-flow-outline-layer {
+      position: absolute;
+      inset: clamp(10px, 2.2vw, 24px);
+      border-radius: clamp(22px, 5vw, 40px);
+      pointer-events: none;
+      z-index: 1;
+      overflow: hidden;
+    }
+
+    .amll-flow-outline-core,
+    .amll-flow-outline-halo {
+      position: absolute;
+      inset: 0;
+      border-radius: inherit;
+    }
+
+    .amll-flow-outline-core {
+      padding: clamp(1.5px, 0.35vw, 3px);
+      background:
+        conic-gradient(
+          from 0deg at 50% 50%,
+          rgba(var(--amll-glow-primary), 0.03) 0deg,
+          rgba(var(--amll-glow-secondary), 0.78) 76deg,
+          rgba(var(--amll-glow-primary), 0.25) 168deg,
+          rgba(var(--amll-glow-secondary), 0.66) 248deg,
+          rgba(var(--amll-glow-primary), 0.1) 320deg,
+          rgba(var(--amll-glow-primary), 0.03) 360deg
+        );
+      -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      -webkit-mask-composite: xor;
+      mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+      mask-composite: exclude;
+      transform-origin: center;
+      animation: amll-flow-outline-spin 9.5s linear infinite;
+    }
+
+    .amll-flow-outline-halo {
+      inset: -12px;
+      background:
+        radial-gradient(circle at 24% 18%, rgba(var(--amll-glow-primary), 0.3), transparent 58%),
+        radial-gradient(circle at 82% 84%, rgba(var(--amll-glow-secondary), 0.28), transparent 62%),
+        radial-gradient(circle at 50% 50%, rgba(var(--amll-glow-shadow), 0.2), transparent 72%);
+      filter: blur(16px) saturate(1.18);
+      opacity: 0.86;
+      animation: amll-flow-halo-drift 12s ease-in-out infinite alternate;
+    }
+
+    @keyframes amll-flow-outline-spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+
+    @keyframes amll-flow-halo-drift {
+      0% {
+        transform: translate3d(-2%, -1.5%, 0) scale(0.98);
+        opacity: 0.78;
+      }
+      100% {
+        transform: translate3d(2%, 1.5%, 0) scale(1.03);
+        opacity: 0.95;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      .amll-flow-outline-core,
+      .amll-flow-outline-halo {
+        animation: none !important;
+      }
     }
   `;
     document.head.appendChild(style);
@@ -52112,6 +52198,173 @@ void main(void)
       return "mesh";
     }
     return void 0;
+  }
+  function clamp(value, min2, max2) {
+    return Math.min(max2, Math.max(min2, value));
+  }
+  function roundRgb(value) {
+    return Math.trunc(clamp(value, 0, 255));
+  }
+  function toCssColorChannels(color) {
+    return `${roundRgb(color.r)}, ${roundRgb(color.g)}, ${roundRgb(color.b)}`;
+  }
+  function rgbToHsl(color) {
+    const r2 = clamp(color.r / 255, 0, 1);
+    const g2 = clamp(color.g / 255, 0, 1);
+    const b2 = clamp(color.b / 255, 0, 1);
+    const max2 = Math.max(r2, g2, b2);
+    const min2 = Math.min(r2, g2, b2);
+    const delta = max2 - min2;
+    let h2 = 0;
+    const l2 = (max2 + min2) / 2;
+    const s2 = delta === 0 ? 0 : delta / (1 - Math.abs(2 * l2 - 1));
+    if (delta !== 0) {
+      if (max2 === r2) {
+        h2 = (g2 - b2) / delta % 6;
+      } else if (max2 === g2) {
+        h2 = (b2 - r2) / delta + 2;
+      } else {
+        h2 = (r2 - g2) / delta + 4;
+      }
+      h2 /= 6;
+      if (h2 < 0) h2 += 1;
+    }
+    return { h: h2, s: clamp(s2, 0, 1), l: clamp(l2, 0, 1) };
+  }
+  function hueToRgb(p2, q2, t2) {
+    let normalized = t2;
+    if (normalized < 0) normalized += 1;
+    if (normalized > 1) normalized -= 1;
+    if (normalized < 1 / 6) return p2 + (q2 - p2) * 6 * normalized;
+    if (normalized < 1 / 2) return q2;
+    if (normalized < 2 / 3) return p2 + (q2 - p2) * (2 / 3 - normalized) * 6;
+    return p2;
+  }
+  function hslToRgb(h2, s2, l2) {
+    const hue = (h2 % 1 + 1) % 1;
+    const sat = clamp(s2, 0, 1);
+    const light = clamp(l2, 0, 1);
+    if (sat === 0) {
+      const gray = roundRgb(light * 255);
+      return { r: gray, g: gray, b: gray };
+    }
+    const q2 = light < 0.5 ? light * (1 + sat) : light + sat - light * sat;
+    const p2 = 2 * light - q2;
+    return {
+      r: roundRgb(hueToRgb(p2, q2, hue + 1 / 3) * 255),
+      g: roundRgb(hueToRgb(p2, q2, hue) * 255),
+      b: roundRgb(hueToRgb(p2, q2, hue - 1 / 3) * 255)
+    };
+  }
+  function blendColor(from, to2, ratio) {
+    const t2 = clamp(ratio, 0, 1);
+    const inv = 1 - t2;
+    return {
+      r: roundRgb(from.r * inv + to2.r * t2),
+      g: roundRgb(from.g * inv + to2.g * t2),
+      b: roundRgb(from.b * inv + to2.b * t2)
+    };
+  }
+  function applyBackgroundLikeToneMap(color) {
+    let r2 = color.r;
+    let g2 = color.g;
+    let b2 = color.b;
+    r2 = (r2 - 128) * 0.4 + 128;
+    g2 = (g2 - 128) * 0.4 + 128;
+    b2 = (b2 - 128) * 0.4 + 128;
+    const gray = r2 * 0.3 + g2 * 0.59 + b2 * 0.11;
+    r2 = gray * -2 + r2 * 3;
+    g2 = gray * -2 + g2 * 3;
+    b2 = gray * -2 + b2 * 3;
+    r2 = (r2 - 128) * 1.7 + 128;
+    g2 = (g2 - 128) * 1.7 + 128;
+    b2 = (b2 - 128) * 1.7 + 128;
+    return {
+      r: roundRgb(r2 * 0.75),
+      g: roundRgb(g2 * 0.75),
+      b: roundRgb(b2 * 0.75)
+    };
+  }
+  function loadImage(source) {
+    return new Promise((resolve, reject) => {
+      const img = new Image();
+      img.decoding = "async";
+      img.crossOrigin = "anonymous";
+      img.onload = () => resolve(img);
+      img.onerror = () => reject(new Error("Failed to load album art image"));
+      img.src = source;
+    });
+  }
+  async function extractFlowGlowPalette(source) {
+    const albumSource = String(source ?? "").trim();
+    if (!albumSource) return DEFAULT_FLOW_GLOW_PALETTE;
+    const image = await loadImage(albumSource);
+    const canvas = document.createElement("canvas");
+    const sampleSize = 56;
+    canvas.width = sampleSize;
+    canvas.height = sampleSize;
+    const ctx = canvas.getContext("2d", { willReadFrequently: true });
+    if (!ctx) return DEFAULT_FLOW_GLOW_PALETTE;
+    const width = image.naturalWidth || image.width;
+    const height = image.naturalHeight || image.height;
+    if (width <= 0 || height <= 0) return DEFAULT_FLOW_GLOW_PALETTE;
+    ctx.clearRect(0, 0, sampleSize, sampleSize);
+    ctx.drawImage(image, 0, 0, width, height, 0, 0, sampleSize, sampleSize);
+    const imageData = ctx.getImageData(0, 0, sampleSize, sampleSize);
+    const pixels = imageData.data;
+    let totalWeight = 0;
+    let sumR = 0;
+    let sumG = 0;
+    let sumB = 0;
+    let bestAccentScore = -Infinity;
+    let accentCandidate = null;
+    for (let i2 = 0; i2 < pixels.length; i2 += 4) {
+      const alpha = pixels[i2 + 3] / 255;
+      if (alpha < 0.18) continue;
+      const toned = applyBackgroundLikeToneMap({
+        r: pixels[i2],
+        g: pixels[i2 + 1],
+        b: pixels[i2 + 2]
+      });
+      const { s: s2, l: l2 } = rgbToHsl(toned);
+      if (l2 < 0.08 || l2 > 0.95) continue;
+      const vibrantWeight = Math.max(0, s2 - 0.12) * 1.45;
+      const luminanceWeight = Math.max(0, 1 - Math.abs(l2 - 0.55) * 1.8);
+      const weight = alpha * (0.22 + vibrantWeight + luminanceWeight * 0.9);
+      if (weight <= 0) continue;
+      totalWeight += weight;
+      sumR += toned.r * weight;
+      sumG += toned.g * weight;
+      sumB += toned.b * weight;
+      const accentScore = s2 * 0.72 + luminanceWeight * 0.48;
+      if (accentScore > bestAccentScore) {
+        bestAccentScore = accentScore;
+        accentCandidate = toned;
+      }
+    }
+    if (totalWeight <= 1e-4) return DEFAULT_FLOW_GLOW_PALETTE;
+    const averageColor = {
+      r: roundRgb(sumR / totalWeight),
+      g: roundRgb(sumG / totalWeight),
+      b: roundRgb(sumB / totalWeight)
+    };
+    const primary = accentCandidate ? blendColor(averageColor, accentCandidate, 0.35) : averageColor;
+    const primaryHsl = rgbToHsl(primary);
+    const secondary = hslToRgb(
+      primaryHsl.h + 0.11 + (1 - primaryHsl.s) * 0.07,
+      clamp(primaryHsl.s * 1.08 + 0.1, 0.34, 0.95),
+      clamp(primaryHsl.l * 1.07 + 0.06, 0.42, 0.8)
+    );
+    const shadow = hslToRgb(
+      primaryHsl.h - 0.08,
+      clamp(primaryHsl.s * 0.72 + 0.12, 0.22, 0.88),
+      clamp(primaryHsl.l * 0.48, 0.16, 0.44)
+    );
+    return {
+      primary,
+      secondary,
+      shadow
+    };
   }
   const FALLBACK_WORD_DURATION_MS = 180;
   const FALLBACK_LINE_DURATION_MS = 600;
@@ -52274,7 +52527,9 @@ void main(void)
     const [renderMode, setRenderModeState] = reactExports.useState("dom");
     const [backgroundConfig, setBackgroundConfig] = reactExports.useState(DEFAULT_BACKGROUND_CONFIG);
     const [motionConfig, setMotionConfig] = reactExports.useState(DEFAULT_MOTION_CONFIG);
+    const [flowGlowPalette, setFlowGlowPalette] = reactExports.useState(DEFAULT_FLOW_GLOW_PALETTE);
     const setLowFreqVolume = useSetAtom(zh);
+    const flowPaletteJobRef = reactExports.useRef(0);
     reactExports.useEffect(() => {
       if (window.__amll) {
         window.__amll.player = playerRef.current;
@@ -52351,11 +52606,6 @@ void main(void)
         if (playerRef.current?.lyricPlayer) {
           playerRef.current.lyricPlayer.setIsSeeking(seekNow);
           playerRef.current.lyricPlayer.setCurrentTime(Math.trunc(parsedTime), seekNow);
-        }
-        if (seekNow) {
-          playerRef.current?.lyricPlayer?.setIsSeeking(false);
-          isSeekingRef.current = false;
-          setIsSeeking(false);
         }
       };
       window.updateAlbumArt = async function(uri2) {
@@ -52453,6 +52703,22 @@ void main(void)
       };
     }, [setLyricLines, setCurrentTime, setAlbumUri, setIsPlaying, setLowFreqVolume]);
     reactExports.useEffect(() => {
+      const paletteJobId = ++flowPaletteJobRef.current;
+      const nextAlbum = typeof albumUri === "string" && albumUri.trim().length > 0 ? albumUri.trim() : demoAlbumArt;
+      if (!nextAlbum) {
+        setFlowGlowPalette(DEFAULT_FLOW_GLOW_PALETTE);
+        return;
+      }
+      void extractFlowGlowPalette(nextAlbum).then((nextPalette) => {
+        if (flowPaletteJobRef.current !== paletteJobId) return;
+        setFlowGlowPalette(nextPalette);
+      }).catch((error) => {
+        if (flowPaletteJobRef.current !== paletteJobId) return;
+        setFlowGlowPalette(DEFAULT_FLOW_GLOW_PALETTE);
+        logToAndroid(`Flow glow palette fallback: ${error.message}`, "warn");
+      });
+    }, [albumUri]);
+    reactExports.useEffect(() => {
       authorityTimeRef.current = currentTime;
       authorityAtRef.current = getMonotonicTime();
       currentTimeRef.current = currentTime;
@@ -52510,7 +52776,15 @@ void main(void)
       }
     };
     const backgroundRenderer = backgroundConfig.renderer === "mesh" ? fe$1 : me$1;
-    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { id: "app", style: { position: "relative", width: "100%", height: "100vh" }, children: [
+    const appStyle = {
+      position: "relative",
+      width: "100%",
+      height: "100vh",
+      "--amll-glow-primary": toCssColorChannels(flowGlowPalette.primary),
+      "--amll-glow-secondary": toCssColorChannels(flowGlowPalette.secondary),
+      "--amll-glow-shadow": toCssColorChannels(flowGlowPalette.shadow)
+    };
+    return /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { id: "app", style: appStyle, children: [
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         _,
         {
@@ -52532,6 +52806,10 @@ void main(void)
           style: { position: "absolute", inset: 0, zIndex: 0 }
         }
       ),
+      /* @__PURE__ */ jsxRuntimeExports.jsxs("div", { className: "amll-flow-outline-layer", "aria-hidden": "true", children: [
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "amll-flow-outline-core" }),
+        /* @__PURE__ */ jsxRuntimeExports.jsx("div", { className: "amll-flow-outline-halo" })
+      ] }),
       /* @__PURE__ */ jsxRuntimeExports.jsx(
         v,
         {
@@ -52553,7 +52831,7 @@ void main(void)
           style: {
             position: "absolute",
             inset: 0,
-            zIndex: 1,
+            zIndex: 2,
             width: "100%",
             height: "100%",
             fontFamily: "var(--amll-lp-font-family, system-ui)",

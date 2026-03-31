@@ -364,6 +364,7 @@ fun AMLLLyricsView(
                         lastFontConfigSignature = null
                         pendingSeekTargetMs = null
                         pendingSeekIssuedAtMs = null
+                        lastSentIsPlayingToWebView = null
                         Timber.d("[AMLLLyrics] [$debugSource#$instanceId] WebView page started: $url")
                     }
 
@@ -372,6 +373,7 @@ fun AMLLLyricsView(
                         // Force one re-sync after page finishes to avoid losing early bridge calls.
                         lastModeValue = null
                         lastBackgroundProfileValue = null
+                        lastSentIsPlayingToWebView = null
                         // 页面刷新结束时不主动清空 lastLyrics，让我们知道是否还有有效歌词
                         // lastLyrics = null
                         // 页面刷新完成后如果我们之前有歌词 JSON 且当前仍然有 lyrics（不是因歌曲切换而清空），先立刻重新下发
@@ -513,10 +515,19 @@ fun AMLLLyricsView(
 
             Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Update callback - WebView actual size: width=${view.width}, height=${view.height}, measuredWidth=${view.measuredWidth}, measuredHeight=${view.measuredHeight}")
 
+            // Sync playing state so the frontend tick loop can interpolate time at 60fps.
+            // Without this, isPlayingRef stays false and time only advances on updateTime calls.
+            val currentIsPlaying = isPlayingState.value
+            if (lastSentIsPlayingToWebView != currentIsPlaying) {
+                Timber.d("[AMLLLyrics] [$debugSource#$instanceId] Bridge call: setPaused(${!currentIsPlaying})")
+                view.evaluateJavascript("window.setPaused && window.setPaused(${!currentIsPlaying});", null)
+                lastSentIsPlayingToWebView = currentIsPlaying
+            }
+
             // 立即更新时间，减少歌词行激活延迟
             Timber.d("[AMLLLyrics] [WebView] [$debugSource#$instanceId] Bridge call: updateTime($currentTime)")
             view.evaluateJavascript("window.updateTime && window.updateTime($currentTime);", null)
-            
+
             // 同时通过 WebSocket 发送到外部服务
             val targetSeekMs = pendingSeekTargetMs
             if (targetSeekMs != null) {
